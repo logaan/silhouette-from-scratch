@@ -8,8 +8,9 @@ import {CameoBluetooth} from './bluetooth.js';
 const $=id=>document.getElementById(id),NS='http://www.w3.org/2000/svg';
 let view=null,viewMat=null;
 let config,drawing=null,job=null,reviewed=null,rawText='',busy=false,hasRun=false,liveRun=null;
-const dryRun=isDryRun();
-const device=new (dryRun?DryRunCameo:CameoBluetooth)(state=>{$('connection').textContent=state;$('connect').textContent=device.connected?'Disconnect':'Connect Cameo ↗';updateRun();});
+let dryRun=isDryRun(),connecting=false;
+const connectionChanged=state=>{$('connection').textContent=state;$('connect').textContent=dryRun?'Connect real Cameo ↗':device.connected?'Disconnect':'Connect Cameo ↗';updateRun();};
+let device=new (dryRun?DryRunCameo:CameoBluetooth)(connectionChanged);
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;setTimeout(()=>$('toast').hidden=true,10000);}
 function node(tag,attrs,parent){const el=document.createElementNS(NS,tag);for(const [k,v]of Object.entries(attrs))el.setAttribute(k,v);parent.appendChild(el);return el;}
 function options(){const size=config.sizes.find(s=>s.id===$('sheet').value);return {mat:$('mat').value,sheetWidth:$('landscape').checked?size.height_mm:size.width_mm,sheetHeight:$('landscape').checked?size.width_mm:size.height_mm,x:Number($('x').value),y:Number($('y').value),rotation:Number($('rotation').value),order:$('order').value,optimise:$('optimise').checked};}
@@ -64,7 +65,7 @@ $('risk-form').addEventListener('submit',e=>{e.preventDefault();try{saveRisk(ack
 $('risk-check').addEventListener('change',()=>{try{saveRisk(acknowledge(readRisk(),{checked:$('risk-check').checked}));$('risk-error').textContent='';}catch(err){$('risk-error').textContent=err.message;}updateRun();});
 window.addEventListener('storage',e=>{if(e.key===RISK_KEY||e.key===null)updateRun();});
 window.addEventListener('focus',()=>updateRun());
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)updateRun();});
+document.addEventListener('visibilitychange',()=>{if(busy)device.log.push({time:new Date().toISOString(),direction:'event',type:'visibility-change',visibility:document.visibilityState});if(!document.hidden)updateRun();});
 setInterval(()=>{if(screen==='preview')updateRun();},30000);
 function updateRun(){const risk=refreshRisk();$('connect-next').disabled=!device.connected;$('wizard-next').disabled=busy||(screen==='connect'&&!device.connected)||(screen==='design'&&!job);$('run').disabled=!risk.accepted||!reviewed||!device.connected||!$('ready-check').checked||busy;$('run-note').textContent=device.connected?(dryRun?'Dry run only. No commands will be sent to hardware.':'Run sends this reviewed job to the Cameo.'):'Connect the Cameo using Chrome to continue.';}
 function setBusy(value){busy=value;for(const el of document.querySelectorAll('main input,main select,main button,#connect'))el.disabled=value;$('stop').disabled=!value;if(!value){render();$('connect').disabled=false;showScreen('run');}updateRun();}
@@ -82,7 +83,8 @@ $('center').onclick=centreDrawing;
 $('review').onclick=review;$('ready-check').onchange=updateRun;$('run').onclick=run;
 $('download').onclick=()=>{if(job)download('silhouette-job-report.json',JSON.stringify(job,null,2));};
 $('save-log').onclick=()=>download('silhouette-activity.json',JSON.stringify({version:2,build:{commit:document.querySelector('.build-footer a').title,url:document.querySelector('.build-footer a').href},mode:dryRun?'dry-run':'hardware',identity:device.identity||null,events:device.log},null,2));
-$('connect').onclick=async()=>{if(device.connected){device.disconnect();return;}try{$('connect').disabled=true;$('connection').textContent='Choosing device…';await device.connect();navigate('material');}catch(err){toast(err.message);$('connection').textContent='Not connected';}finally{$('connect').disabled=false;updateRun();}};
+$('choose-dry-run').onclick=async()=>{if(busy||connecting)return;device.disconnect();dryRun=true;device=new DryRunCameo(connectionChanged);$('dry-run-banner').hidden=false;await device.connect();navigate('material');};
+$('connect').onclick=async()=>{if(busy||connecting)return;if(dryRun){device.disconnect();dryRun=false;device=new CameoBluetooth(connectionChanged);$('dry-run-banner').hidden=true;}if(device.connected){device.disconnect();return;}try{connecting=true;$('choose-dry-run').disabled=true;$('connect').disabled=true;$('connection').textContent='Choosing device…';await device.connect();navigate('material');}catch(err){toast(err.message);$('connection').textContent='Not connected';}finally{connecting=false;$('choose-dry-run').disabled=false;$('connect').disabled=false;updateRun();}};
 $('stop').onclick=()=>{device.stop();$('progress-label').textContent='Sending stopped. Press the machine’s pause button to halt buffered movement.';};
 let drag=null;
 function coord(e){const p=new DOMPoint(e.clientX,e.clientY);return p.matrixTransform($('canvas').getScreenCTM().inverse());}
@@ -108,16 +110,16 @@ function showScreen(next){
  if(!device.connected&&next!=='connect'&&!busy)next='connect';
  if(next==='preview'&&!job)next='design';
  if(next==='run'&&!busy&&!hasRun)next='design';
- stopPreview();screen=next;window.scrollTo(0,0);document.body.classList.toggle('previewing',screen==='preview');document.body.classList.toggle('running-view',screen==='run');
+ stopPreview();screen=next;window.scrollTo(0,0);document.body.classList.toggle('previewing',screen==='preview');document.body.classList.toggle('running-view',screen==='run');document.body.dataset.screen=screen;
  for(const id of screens)$('screen-'+id).hidden=id!==screen;
- if(screen==='preview')$('preview-canvas').append(canvasPanel);else if(screen==='run')$('run-canvas').append(canvasPanel);else $('design-canvas').append(canvasPanel);
- $('wizard-nav').replaceChildren(...screens.map((id,i)=>{const item=document.createElement('span');item.className='wizard-step'+(id===screen?' current':i<screens.indexOf(screen)?' completed':'');if(id===screen)item.setAttribute('aria-current','step');const number=document.createElement('span');number.className='step-number';number.textContent=String(i+1).padStart(2,'0');item.append(number,document.createTextNode(id[0].toUpperCase()+id.slice(1)));return item;}));
+ if(screen==='material')$('material-canvas').append(canvasPanel);else if(screen==='preview')$('preview-canvas').append(canvasPanel);else if(screen==='run')$('run-canvas').append(canvasPanel);else $('design-canvas').append(canvasPanel);
+ $('wizard-nav').replaceChildren(...screens.map((id,i)=>{const item=document.createElement('button');item.type='button';item.disabled=busy||i>=screens.indexOf(screen);item.onclick=()=>{if(!busy&&i<screens.indexOf(screen))navigate(id);};item.className='wizard-step'+(id===screen?' current':i<screens.indexOf(screen)?' completed':'');if(id===screen)item.setAttribute('aria-current','step');const number=document.createElement('span');number.className='step-number';number.textContent=String(i+1).padStart(2,'0');item.append(number,document.createTextNode(id[0].toUpperCase()+id.slice(1)));return item;}));
  $('wizard-back').disabled=screen==='connect'||busy;
  $('wizard-next').hidden=screen==='preview'||screen==='run';
  $('connect-next').hidden=screen!=='connect';
  $('wizard-next').hidden=screen!=='material';$('wizard-next').textContent='Arrange design →';
  $('preview-art').replaceChildren();
- if(screen==='preview'){review();preparePreview();}if(screen==='run'&&config)render();
+ if(screen==='preview'){review();preparePreview();}if((screen==='run'||screen==='material'||screen==='design')&&config)render();
  updateRun();
 }
 function navigate(next){showScreen(next);history.pushState({screen},'',`#${screen}`);}
@@ -155,4 +157,4 @@ $('play-preview').onclick=()=>{if(animation!==null){stopPreview();return;}if(seg
 $('restart-preview').onclick=preparePreview;
 $('optimise').onchange=render;
 history.replaceState({screen:'connect'},'','#connect');showScreen('connect');
-try{const res=await fetch('./config.json');if(!res.ok)throw Error('Material configuration unavailable. Run npm run build.');config=await res.json();for(const [id,items]of [['material',config.materials],['sheet',config.sizes]])for(const item of items){const op=document.createElement('option');op.value=item.id;op.textContent=item.name;$(id).appendChild(op);}$('sheet').value='a3';$('material').value='makr-180gsm-paper-cardstock';loadPreset();if(dryRun){$('dry-run-banner').hidden=false;await device.connect();navigate('material');}else if(!navigator.bluetooth)$('connection').textContent='Chrome required for Bluetooth';else{try{$('connect').disabled=true;$('connection').textContent='Checking saved connection…';if(await device.reconnect())navigate('material');else $('connection').textContent='Not connected';}catch{$('connection').textContent='Could not reconnect. Turn on your Cameo and connect below.';}finally{$('connect').disabled=false;}}}catch(err){toast(err.message);}
+try{const res=await fetch('./config.json');if(!res.ok)throw Error('Material configuration unavailable. Run npm run build.');config=await res.json();for(const [id,items]of [['material',config.materials],['sheet',config.sizes]])for(const item of items){const op=document.createElement('option');op.value=item.id;op.textContent=item.name;$(id).appendChild(op);}$('sheet').value='a3';$('material').value='makr-180gsm-paper-cardstock';loadPreset();if(dryRun){$('dry-run-banner').hidden=false;await device.connect();navigate('material');}else if(!navigator.bluetooth)$('connection').textContent='Chrome required for Bluetooth';else{try{connecting=true;$('choose-dry-run').disabled=true;$('connect').disabled=true;$('connection').textContent='Checking saved connection…';if(await device.reconnect())navigate('material');else $('connection').textContent='Not connected';}catch{$('connection').textContent='Could not reconnect. Turn on your Cameo and connect below.';}finally{connecting=false;$('choose-dry-run').disabled=false;$('connect').disabled=false;}}}catch(err){toast(err.message);}

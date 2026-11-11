@@ -30,10 +30,10 @@ Open [localhost:4173](http://127.0.0.1:4173) in Chrome. Bluetooth requires HTTPS
 1. Close Silhouette Studio and connect the Cameo in Chrome.
 2. Select a material. Its default mat and sheet size are selected automatically and can be changed.
 3. Import a DXF or try the included colour test or eight-compartment box. Position the drawing with the mat preview; keep active paths at least 3 mm inside the sheet edges.
-4. Preview the operation sequence. Automatic optimisation joins touching paths, starts each operation group nearest the top-left corner, then prioritises collinear horizontal paths, other collinear paths and nearby moves. Uncheck it to preserve the original path order within each operation group. The animation includes travel and repeated passes; its speed is illustrative.
+4. Preview the operation sequence. Automatic optimisation joins touching paths and starts each operation group nearest the top-left corner. It chooses subsequent paths from the tool’s current endpoint, can reverse open paths, and chooses nearby entry vertices on closed shapes. Collinear moves receive a small preference, with horizontal moves favoured. Repeat passes reverse direction to avoid return trips. Uncheck it to preserve the original path order within each operation group. The animation includes travel and repeated passes; its speed is illustrative.
 5. Load the mat, check the tools and settings, acknowledge the risk, and run the job.
 
-Use the wizard’s Back button or browser Back/Forward to revisit screens. Rotation and centring are available; drawings retain their imported size. Scroll to pan the mat and pinch to zoom.
+Click an earlier step heading, use the wizard’s Back button, or use browser Back/Forward to revisit screens. Choose **Start dry run** on Connect to explore the complete workflow without hardware. Rotation and centring are available; drawings retain their imported size. Scroll to pan the mat and pinch to zoom.
 
 Machine Activity animates the active path and marks operations complete when the Cameo reports ready. It does not estimate exact tool position. Activity logs include the build, job settings, and per-operation send and wait timings.
 

@@ -17,13 +17,14 @@ export function compileJob(drawing,options,preset){
  const steps=[{label:'Set mat',commands:[`TG${mat.code}`,'FN0','TB50,0','FM0','TR0,1','\\0,0',`Z${su(mat.height)},${su(mat.width)}`],wait:true}],operations=[];
  const orderedPaths=[];
  for(const op of groups){
-  let group=active.filter(p=>p.operation===op);if(options.optimise)group=optimisePaths(group);if(!group.length)continue;
+  let group=active.filter(p=>p.operation===op);if(options.optimise)group=optimisePaths(group,{passes:preset[op].passes});if(!group.length)continue;
   orderedPaths.push(...group);
   const s=preset[op],t=s.tool,offset=op==='cut'?18:0,corner=op==='cut'?1:0;
   steps.push({label:`Set ${op} tool`,commands:[`J${t}`,`FX${s.force},${t}`,'TJ1',`!${s.speed},${t}`,'APS0',`FC${offset},1,${t}`,`FE0,${t}`,`FF${corner},${corner},${t}`,'FY1',...(op==='cut'?[`TF${s.depth},1`]:[])],wait:true});
   operations.push({operation:op,tool:t,...s,pathCount:group.length});
   for(let i=0;i<group.length;i++)for(let pass=0;pass<s.passes;pass++){
-   const points=group[i].points.map(([x,y])=>[su(x),su(y)]).filter((p,i,a)=>!i||p[0]!==a[i-1][0]||p[1]!==a[i-1][1]);
+   const pathPoints=options.optimise&&pass%2===1?[...group[i].points].reverse():group[i].points;
+   const points=pathPoints.map(([x,y])=>[su(x),su(y)]).filter((p,i,a)=>!i||p[0]!==a[i-1][0]||p[1]!==a[i-1][1]);
    if(points.length<2)throw Error('A path is smaller than the cutter resolution (0.05 mm)');
    const commands=points.map(([x,y],i)=>`${i?'D':'M'}${y},${x}`);
    steps.push({label:`${op==='cut'?'Cut':'Crease'} ${i+1}/${group.length} · pass ${pass+1}/${s.passes}`,commands,wait:true});

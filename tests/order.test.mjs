@@ -11,9 +11,9 @@ test('joins reversed touching paths without bridging gaps or mixing tools',()=>{
  const before=structuredClone(p),result=optimisePaths(p);
  assert.equal(result.length,3);assert.deepEqual(edges(result),edges(p));assert.deepEqual(p,before);
 });
-test('collinear horizontal continuation takes priority over nearby disconnected geometry',()=>{
+test('nearby geometry is not skipped for a distant collinear continuation',()=>{
  const p=[path([[0,0],[10,0]]),path([[10,1],[10,2]]),path([[20,0],[30,0]])];
- assert.deepEqual(optimisePaths(p)[1].points,[[20,0],[30,0]]);
+ assert.deepEqual(optimisePaths(p)[1].points,[[10,1],[10,2]]);
 });
 test('box optimisation preserves every machine segment and reduces separate paths',()=>{
  const drawing=parseDXF(fs.readFileSync('test-files/foldover-8-compartment-box.dxf','utf8'));
@@ -27,9 +27,9 @@ test('box optimisation preserves every machine segment and reduces separate path
  assert.deepEqual(optimised.operations.map(o=>o.operation),['crease','cut']);
  assert.deepEqual(previewSegments(optimised).at(-1).to,[0,0]);
 });
-test('horizontal collinear groups are scheduled before vertical collinear groups',()=>{
- const p=[path([[0,0],[1,1]]),path([[2,3],[2,4]]),path([[2,6],[2,7]]),path([[10,10],[11,10]]),path([[13,10],[14,10]])];
- const result=optimisePaths(p);assert.equal(result[1].points[0][1],10);assert.equal(result[2].points[0][1],10);
+test('nearby horizontal continuation receives a bounded preference',()=>{
+ const p=[path([[0,0],[10,0]]),path([[10,2],[10,3]]),path([[13,0],[16,0]])];
+ assert.deepEqual(optimisePaths(p)[1].points,[[13,0],[16,0]]);
 });
 test('first path starts nearest the top-left even when distant collinear groups exist',()=>{
  const p=[path([[20,20],[30,20]]),path([[40,20],[50,20]]),path([[8,9],[2,3]])];
@@ -38,4 +38,25 @@ test('first path starts nearest the top-left even when distant collinear groups 
 test('closed paths start at their nearest vertex without changing their edges',()=>{
  const p=[path([[20,20],[5,20],[5,5],[20,5],[20,20]])];
  const result=optimisePaths(p);assert.deepEqual(result[0].points[0],[5,5]);assert.deepEqual(edges(result),edges(p));
+});
+test('closed paths choose the nearest entry from the current endpoint',()=>{
+ const p=[path([[1,1],[19,19]]),path([[5,5],[20,5],[20,20],[5,20],[5,5]])];
+ const result=optimisePaths(p);assert.deepEqual(result[1].points[0],[20,20]);assert.deepEqual(edges(result),edges(p));
+});
+test('open paths can reverse to start at their nearer endpoint',()=>{
+ const p=[path([[1,1],[30,30]]),path([[60,60],[31,30]])];
+ assert.deepEqual(optimisePaths(p)[1].points,[[31,30],[60,60]]);
+});
+test('route accounts for the final endpoint after reversed repeat passes',()=>{
+ const p=[path([[1,1],[20,1]]),path([[2,2],[3,2]]),path([[21,2],[22,2]])];
+ assert.deepEqual(optimisePaths(p,{passes:2})[1].points[0],[2,2]);
+ assert.deepEqual(optimisePaths(p,{passes:1})[1].points[0],[21,2]);
+});
+test('optimised repeated passes reverse direction and preserve original ordering when disabled',()=>{
+ const drawing={paths:[path([[0,0],[10,0]],'crease')],counts:{cut:0,crease:1,ignored:0}};
+ const preset={name:'Test',cut:{tool:1,force:15,speed:30,depth:4,passes:1},crease:{tool:2,force:33,speed:30,passes:2}};
+ const options={mat:'12x12',sheetWidth:300,sheetHeight:300,x:10,y:10,rotation:0,order:'crease-first'};
+ const job=compileJob(drawing,{...options,optimise:true},preset),passes=job.steps.filter(s=>s.label.startsWith('Crease '));
+ assert.equal(passes[0].commands.at(-1).slice(1),passes[1].commands[0].slice(1));
+ const original=compileJob(drawing,{...options,optimise:false},preset).steps.filter(s=>s.label.startsWith('Crease '));assert.deepEqual(original[0].commands,original[1].commands);
 });

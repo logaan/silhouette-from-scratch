@@ -38,7 +38,7 @@ function render(){
  }catch(err){$('validation').textContent=err.message;}
  $('validation').classList.toggle('invalid',!!drawing&&!valid);$('review').disabled=!valid||busy;$('download').disabled=!valid||busy;updateRun();if(screen==='preview'&&job)review();
 }
-async function importText(text,name){try{const parsed=parseDXF(text,$('units').value==='auto'?null:$('units').value);rawText=text;drawing=parsed;$('filename').textContent=name;render();}catch(err){drawing=null;rawText=text;$('filename').textContent=name;render();toast(err.message);}}
+async function importText(text,name){try{const parsed=parseDXF(text,$('units').value==='auto'?null:$('units').value);rawText=text;drawing=parsed;$('filename').textContent=name;centreDrawing();}catch(err){drawing=null;rawText=text;$('filename').textContent=name;render();toast(err.message);}}
 async function importFile(file){if(screen!=='design'||busy)return;if(!file)return;if(file.size>10_000_000)return toast('File exceeds 10 MB');await importText(await file.text(),file.name);}
 function download(name,data,type='application/json'){const url=URL.createObjectURL(new Blob([data],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function review(){if(!job)return;reviewed=structuredClone(job);const content=$('review-content');content.replaceChildren();
@@ -75,7 +75,8 @@ $('example').onclick=async()=>{try{const response=await fetch('./example.dxf');i
 $('units').onchange=()=>{if(rawText)importText(rawText,$('filename').textContent);};
 for(const id of ['mat','sheet','landscape','x','y','rotation','order','show-ignored','cut-force','cut-speed','cut-depth','cut-passes','crease-force','crease-speed','crease-passes'])$(id).addEventListener('input',render);
 $('material').onchange=loadPreset;$('reset').onclick=loadPreset;
-$('center').onclick=()=>{if(!drawing)return;const o=options(),b=bounds(positioned(drawing,{...o,x:0,y:0}));$('x').value=((o.sheetWidth-b.width)/2).toFixed(2);$('y').value=((o.sheetHeight-b.height)/2).toFixed(2);render();};
+function centreDrawing(){if(!drawing)return;const o=options(),b=bounds(positioned(drawing,{...o,x:0,y:0}));$('x').value=((o.sheetWidth-b.width)/2).toFixed(2);$('y').value=((o.sheetHeight-b.height)/2).toFixed(2);render();}
+$('center').onclick=centreDrawing;
 $('review').onclick=review;$('ready-check').onchange=updateRun;$('run').onclick=run;
 $('download').onclick=()=>{if(job)download('silhouette-job-report.json',JSON.stringify(job,null,2));};
 $('save-log').onclick=()=>download('silhouette-activity.json',JSON.stringify({identity:device.identity||null,events:device.log},null,2));

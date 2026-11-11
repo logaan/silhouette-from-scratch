@@ -27,3 +27,16 @@ test('failed batch keeps sent work unconfirmed and never sends the next batch',a
  await assert.rejects(c.run({steps:Array.from({length:4},(_,i)=>step(`Cut ${i}`,i))},(p,l,d)=>{if(d.phase==='failed')failed=d;}),/unexpected/);
  assert.equal(writes,2);assert.deepEqual(failed.outstanding,[0,1]);assert(!c.log.some(e=>e.type==='step-complete'));
 });
+test('tool-phase mode spans the old count and byte caps but never crosses a tool change',()=>{
+ const job={steps:[step('Set crease tool',0),...Array.from({length:300},(_,i)=>step(`Crease ${i}`,i)),step('Set cut tool',0),step('Cut 1',0),step('Return to origin',0)]};
+ const batch=operationBatch(job,1,'tool',64);assert.equal(batch.indices.length,300);assert(batch.bytes>4096);assert.deepEqual(operationBatch(job,0,'tool').indices,[0]);assert.deepEqual(operationBatch(job,301,'tool').indices,[301]);assert.deepEqual(operationBatch(job,302,'tool').indices,[302]);
+});
+test('tool-phase runner confirms creases before sending cut setup and never retransmits on resume',async()=>{
+ const c=new CameoBluetooth();c.connected=true;c.batchLimit='tool';const writes=[];let readyCalls=0,release,reached;
+ const waiting=new Promise(resolve=>reached=resolve);
+ c.ready=async()=>{if(++readyCalls===2){reached();await new Promise(resolve=>release=resolve);}};
+ c.send=async bytes=>writes.push(new TextDecoder().decode(bytes));
+ const job={steps:[...Array.from({length:6},(_,i)=>step(`Crease ${i}`,i)),step('Set cut tool',10),step('Cut 1',11)]};
+ let paused;const pausedAt=new Promise(resolve=>paused=resolve);
+ const running=c.run(job,(p,label,d)=>{if(d.phase==='paused')paused();});await waiting;assert.equal(writes.length,6);assert(!c.log.some(e=>e.type==='step-complete'));c.pause();release();await pausedAt;assert.equal(writes.length,6);c.resume();await running;assert.equal(writes.length,8);assert.deepEqual(c.log.filter(e=>e.type==='batch-complete').map(e=>e.indices.length),[6,1,1]);assert.equal(c.log.find(e=>e.type==='batch-start').mode,'tool-phase');
+});

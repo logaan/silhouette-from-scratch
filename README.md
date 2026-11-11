@@ -37,9 +37,9 @@ Click an earlier step heading, use the wizard’s Back button, or use browser Ba
 
 Machine Activity highlights outstanding paths and marks operations complete when the Cameo reports ready. It does not estimate exact tool position or which buffered path is moving. Activity logs include the build, job settings, send/wait timings, batch completion and polling timer mode. A worker runs the polling timer to reduce background-tab delays; browser and operating-system suspension can still interrupt progress.
 
-Buffering is enabled by default: up to four operations with a 2 KB batch target, without crossing setup or tool-change boundaries. A single continuous operation is never split, even if it exceeds that byte target. Disable buffering to wait after every operation.
+Buffering is enabled by default: send all operations for the current tool, then wait for the Cameo to report ready before switching tools. Setup, tracking preparation and return-to-origin remain separate. Bluetooth writes remain sequential and acknowledged. Disable buffering to wait after every operation. The activity view highlights all unconfirmed operations; it cannot identify which queued operation is physically moving.
 
-**Pause sending** pauses after already-sent work finishes. Resume requires inline confirmation and continues without replaying completed work. Use the Cameo’s physical pause button to stop movement already buffered in the machine.
+**Pause sending** prevents additional operations from being sent after the current transmission, but cannot retract queued work. The whole current cut or crease phase may finish before the pause takes effect. Resume requires inline confirmation and continues without replaying completed work. Use the Cameo’s physical pause button to stop movement already buffered in the machine.
 
 ## Presets
 

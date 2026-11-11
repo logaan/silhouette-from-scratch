@@ -43,7 +43,7 @@ function render(){
   job=compileJob(drawing,o,preset());valid=true;
   $('validation').textContent=`Fits your material. ${job.operations.map(op=>`${op.pathCount} ${op.operation} paths × ${op.passes} pass${op.passes>1?'es':''}`).join(' · ')}.`;
  }catch(err){$('validation').textContent=err.message;}
- $('validation').classList.toggle('invalid',!!drawing&&!valid);$('review').disabled=!valid||busy;$('download').disabled=!valid||busy;$('download-dxf').disabled=!valid||busy;updateRun();if(screen==='preview'&&job)review();if(screen==='run')paintRun();
+ $('validation').classList.toggle('invalid',!!drawing&&!valid);$('review').disabled=!valid||busy;$('download-dxf').disabled=!valid||busy;updateRun();if(screen==='preview'&&job)review();if(screen==='run')paintRun();
 }
 async function importText(text,name){try{const parsed=parseDXF(text,$('units').value==='auto'?null:$('units').value);rawText=text;drawing=parsed;$('filename').textContent=name;centreDrawing();}catch(err){drawing=null;rawText=text;$('filename').textContent=name;render();toast(err.message);}}
 async function importFile(file){if(screen!=='design'||busy)return;if(!file)return;if(file.size>10_000_000)return toast('File exceeds 10 MB');await importText(await file.text(),file.name);}
@@ -74,8 +74,8 @@ document.addEventListener('visibilitychange',()=>{if(busy)device.log.push({time:
 setInterval(()=>{if(screen==='preview')updateRun();},30000);
 function updateRun(){const risk=refreshRisk();$('connect-next').disabled=!device.connected;$('wizard-next').disabled=busy||(screen==='connect'&&!device.connected)||(screen==='design'&&!job);$('run').disabled=!risk.accepted||!reviewed||!device.connected||!$('ready-check').checked||busy;$('run-note').textContent=device.connected?(dryRun?'Dry run only. No commands will be sent to hardware.':'Run sends this reviewed job to the Cameo.'):'Connect the Cameo using Chrome to continue.';}
 function setBusy(value){busy=value;if(!value){$('resume').hidden=true;$('resume-confirm').hidden=true;$('stop').hidden=false;}for(const el of document.querySelectorAll('main input,main select,main button,#connect'))el.disabled=value;$('stop').disabled=!value;$('reset-view').disabled=false;if(!value){render();$('connect').disabled=false;showScreen('run');}updateRun();}
-async function run(){if(!reviewed||busy||!device.connected||!$('ready-check').checked)return;if(!refreshRisk().accepted){updateRun();return;}const snapshot=reviewed;snapshot.build={commit:document.querySelector('.build-footer a').title,url:document.querySelector('.build-footer a').href};liveRun={job:snapshot,segments:previewSegments(snapshot),completed:-1,active:-1,phase:'starting'};$('progress').value=0;$('run-title').textContent=dryRun?'Simulating your job.':'Your job is in motion.';$('run-description').textContent=dryRun?'The simulated Cameo accepts every command without moving hardware.':'Keep the machine attended while it works.';hasRun=true;navigate('run');setBusy(true);
- try{device.batchLimit=optimisationSettings(snapshot.options).batching?'tool':1;await device.run(snapshot,(p,label,detail={})=>{$('progress').value=p;$('progress-label').textContent=label;liveRun.phase=detail.phase;liveRun.outstanding=detail.outstanding||[];liveRun.active=detail.stepIndex??-1;if(detail.phase==='completed')liveRun.completed=detail.stepIndex;paintRun();});$('run-title').textContent=dryRun?'Dry run complete.':'Your job is complete.';$('run-description').textContent=dryRun?'The full job was accepted by the simulated Cameo. No hardware commands were sent.':'The Cameo reports ready. Your activity log is available below.';}
+async function run(){if(!reviewed||busy||!device.connected||!$('ready-check').checked)return;if(!refreshRisk().accepted){updateRun();return;}const snapshot=reviewed;snapshot.build={commit:document.querySelector('.build-footer a').title,url:document.querySelector('.build-footer a').href};liveRun={job:snapshot,segments:previewSegments(snapshot),completed:-1,active:-1,phase:'starting'};$('run-title').textContent=dryRun?'Simulating your job.':'Your job is in motion.';$('run-description').textContent=dryRun?'The simulated Cameo accepts every command without moving hardware.':'Keep the machine attended while it works.';hasRun=true;navigate('run');setBusy(true);
+ try{device.batchLimit=optimisationSettings(snapshot.options).batching?'tool':1;await device.run(snapshot,(p,label,detail={})=>{$('progress-label').textContent=label;liveRun.phase=detail.phase;liveRun.outstanding=detail.outstanding||[];liveRun.active=detail.stepIndex??-1;if(detail.phase==='completed')liveRun.completed=detail.stepIndex;paintRun();});$('run-title').textContent=dryRun?'Dry run complete.':'Your job is complete.';$('run-description').textContent=dryRun?'The full job was accepted by the simulated Cameo. No hardware commands were sent.':'The Cameo reports ready. Your activity log is available below.';}
  catch(err){$('run-title').textContent='Job stopped.';$('progress-label').textContent=err.message;toast(err.message);}finally{setBusy(false);}}
 $('file').addEventListener('change',e=>importFile(e.target.files[0]));
 $('drop').addEventListener('dragover',e=>e.preventDefault());$('drop').addEventListener('drop',e=>{e.preventDefault();importFile(e.dataTransfer.files[0]);});
@@ -87,7 +87,6 @@ function centreDrawing(){if(!drawing)return;const o=options(),b=bounds(positione
 $('center').onclick=centreDrawing;
 $('review').onclick=review;$('ready-check').onchange=updateRun;$('run').onclick=run;
 $('download-dxf').onclick=()=>{if(!job||busy)return;try{const stem=$('filename').textContent.replace(/\.dxf$/i,'').replace(/[<>:"/\\|?*]/g,'-').slice(0,100)||'design';download(stem+'-optimised.dxf',exportDXF(job),'application/dxf');}catch(error){toast(error.message);}};
-$('download').onclick=()=>{if(job)download('silhouette-job-report.json',JSON.stringify(job,null,2));};
 $('save-log').onclick=()=>download('silhouette-activity.json',JSON.stringify({version:2,build:{commit:document.querySelector('.build-footer a').title,url:document.querySelector('.build-footer a').href},mode:dryRun?'dry-run':'hardware',identity:device.identity||null,events:device.log},null,2));
 $('choose-dry-run').onclick=async()=>{if(busy||connecting)return;device.disconnect();dryRun=true;device=new DryRunCameo(connectionChanged);$('dry-run-banner').hidden=false;await device.connect();navigate('material');};
 $('connect').onclick=async()=>{if(busy||connecting)return;if(dryRun){device.disconnect();dryRun=false;device=new CameoBluetooth(connectionChanged);$('dry-run-banner').hidden=true;}if(device.connected){device.disconnect();return;}try{connecting=true;$('choose-dry-run').disabled=true;$('connect').disabled=true;$('connection').textContent='Choosing device…';await device.connect();navigate('material');}catch(err){toast(err.message);$('connection').textContent='Not connected';}finally{connecting=false;$('choose-dry-run').disabled=false;$('connect').disabled=false;updateRun();}};
@@ -122,6 +121,7 @@ function showScreen(next){
  stopPreview();screen=next;window.scrollTo(0,0);document.body.classList.toggle('previewing',screen==='preview');document.body.classList.toggle('running-view',screen==='run');document.body.dataset.screen=screen;
  for(const id of screens)$('screen-'+id).hidden=id!==screen;
  if(screen==='material')$('material-canvas').append(canvasPanel);else if(screen==='preview')$('preview-canvas').append(canvasPanel);else if(screen==='run')$('run-canvas').append(canvasPanel);else $('design-canvas').append(canvasPanel);
+ $('canvas-playback').hidden=!['preview','run'].includes(screen);$('preview-playback').hidden=screen!=='preview';$('run-playback').hidden=screen!=='run';
  $('wizard-nav').replaceChildren(...screens.map((id,i)=>{const item=document.createElement('button');item.type='button';item.disabled=busy||i>=screens.indexOf(screen);item.onclick=()=>{if(!busy&&i<screens.indexOf(screen))navigate(id);};item.className='wizard-step'+(id===screen?' current':i<screens.indexOf(screen)?' completed':'');if(id===screen)item.setAttribute('aria-current','step');const number=document.createElement('span');number.className='step-number';number.textContent=String(i+1).padStart(2,'0');item.append(number,document.createTextNode(id[0].toUpperCase()+id.slice(1)));return item;}));
  $('wizard-back').disabled=screen==='connect'||busy;
  $('wizard-next').hidden=screen==='preview'||screen==='run';
@@ -152,8 +152,21 @@ function paintRun(){
   const uncertain=active&&liveRun.phase==='failed';
   node('line',{x1:s.from[0],y1:s.from[1],x2:s.to[0],y2:s.to[1],stroke:uncertain?'#b47c22':s.bridge?'#00877f':s.travel?'#82907d':s.operation==='cut'?'#d64036':'#304cdd','stroke-width':s.travel?.6:1.5,'stroke-dasharray':s.travel?'2 2':active?'3 1':'none',class:active&&!uncertain?'live-path':'','vector-effect':'non-scaling-stroke'},art);
  }
+ paintOperationProgress(liveRun.job,liveRun.completed,liveRun.outstanding||[]);
  const total=operationCount(liveRun.job),completed=liveRun.job.steps.slice(0,liveRun.completed+1).filter(s=>/^(Cut|Crease) /.test(s.label)).length;
  $('live-note').textContent=`${completed} of ${total} operations confirmed complete. `+(liveRun.phase==='failed'?'The amber path was not confirmed complete.':liveRun.phase==='complete'?'All operations completed.':liveRun.outstanding?.length>1?'Highlighted paths are the outstanding batch; the exact active operation is unknown.':'The animated path is active; exact tool position is not reported.');
+}
+function paintOperationProgress(current,completed,outstanding=[],fraction=0,active=-1){
+ const operations=current.steps.map((s,index)=>({index,operation:/^(Cut|Crease) /.exec(s.label)?.[1]})).filter(s=>s.operation),total=operations.length;
+ const done=operations.filter(s=>s.index<=completed).length,buffered=operations.filter(s=>s.index>completed&&outstanding.includes(s.index)).length;
+ const shown=done+(operations.some(s=>s.index===active)?Math.max(0,Math.min(1,fraction)):0);
+ $('confirmed-progress').style.width=`${total?shown/total*100:0}%`;$('buffered-progress').style.width=`${total?(done+buffered)/total*100:0}%`;
+ $('operation-progress').setAttribute('aria-valuenow',String(total?Math.round(shown/total*100):0));
+ const text=screen==='run'?`${done} of ${total} operations confirmed · ${buffered} sent or sending, not yet confirmed`:`${Math.floor(shown)} of ${total} operations previewed`;
+ $('operation-progress-label').textContent=text;$('operation-progress').setAttribute('aria-valuetext',text);
+ $('tool-markers').replaceChildren();
+ for(let i=1;i<total;i++)if(operations[i].operation!==operations[i-1].operation){const marker=document.createElement('span');marker.className='tool-marker';marker.style.left=`${i/total*100}%`;marker.title=`Switch to ${operations[i].operation.toLowerCase()} after operation ${i}`;marker.textContent='◆';$('tool-markers').append(marker);}
+ $('operation-progress-label').textContent+=operations.some((s,i)=>i&&s.operation!==operations[i-1].operation)?' · ◆ Tool change':'';
 }
 function updateTransport(){
  const playing=animation!==null,play=$('play-preview');
@@ -175,6 +188,8 @@ function preparePreview(){
 }
 function paintPreview(){
  if(!timeline)return;const state=timeline.state();
+ const current=segments[state.index]?.stepIndex??-1,indices=segments.map((s,i)=>s.stepIndex===current?i:-1).filter(i=>i>=0),start=timeline.starts[indices[0]]||0,end=indices.length?timeline.starts[indices.at(-1)]+timeline.lengths[indices.at(-1)]:0;
+ paintOperationProgress(job,current-1,[],end>start?(timeline.position-start)/(end-start):0,current);
  for(let i=0;i<previewLines.length;i++){
   const line=previewLines[i],s=segments[i],visible=i<=state.index&&timeline.position>0;
   if(line.getAttribute('display')!==(visible?'inline':'none'))line.setAttribute('display',visible?'inline':'none');

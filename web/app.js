@@ -1,3 +1,4 @@
+import {RISK_KEY,acknowledgementState,acknowledge} from './acknowledgement.js';
 import {panView,zoomView} from './viewport.js';
 import {parseDXF,positioned,bounds} from './geometry.js';
 import {compileJob,MATS} from './job.js';
@@ -45,9 +46,27 @@ function review(){if(!job)return;reviewed=structuredClone(job);const content=$('
  for(const op of job.operations){const row=document.createElement('tr');for(const value of [op.operation,op.tool,op.force,op.speed,op.depth??'—',op.passes]){const td=document.createElement('td');td.textContent=value;row.appendChild(td);}table.appendChild(row);}content.appendChild(table);
  const note=document.createElement('p');note.textContent=`${job.ignored} ignored entities excluded. ${job.bytes.toLocaleString()} bytes prepared. Placement: ${job.options.x}, ${job.options.y} mm.`;content.appendChild(note);
  $('ready-check').checked=false;updateRun();$('review-dialog').showModal();}
-function updateRun(){$('run').disabled=!reviewed||!device.connected||!$('ready-check').checked||busy;$('run-note').textContent=device.connected?'Run sends this reviewed job to the Cameo.':'Connect the Cameo using Chrome to run. Offline review is available now.';}
+let riskRecord=null,riskStorageAvailable=true;
+function readRisk(){
+ try{const raw=localStorage.getItem(RISK_KEY);riskRecord=raw?JSON.parse(raw):null;}catch{riskStorageAvailable=false;}
+ return riskRecord;
+}
+function saveRisk(record){riskRecord=record;try{localStorage.setItem(RISK_KEY,JSON.stringify(record));}catch{riskStorageAvailable=false;}}
+function refreshRisk(){
+ const state=acknowledgementState(readRisk());
+ $('risk-form').hidden=!state.needsPhrase;$('risk-checkbox-label').hidden=state.needsPhrase;$('risk-check').checked=state.accepted;
+ $('risk-help').textContent=riskStorageAvailable?'Confirm once each day. Retype the phrase every three months. Saved in this browser only.':'Browser storage is unavailable. This acknowledgement lasts only for this open page.';
+ return state;
+}
+$('risk-form').addEventListener('submit',e=>{e.preventDefault();try{saveRisk(acknowledge(readRisk(),{phrase:$('risk-phrase').value}));$('risk-phrase').value='';$('risk-error').textContent='';updateRun();}catch(err){$('risk-error').textContent=err.message;}});
+$('risk-check').addEventListener('change',()=>{try{saveRisk(acknowledge(readRisk(),{checked:$('risk-check').checked}));$('risk-error').textContent='';}catch(err){$('risk-error').textContent=err.message;}updateRun();});
+window.addEventListener('storage',e=>{if(e.key===RISK_KEY||e.key===null)updateRun();});
+window.addEventListener('focus',()=>updateRun());
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)updateRun();});
+setInterval(()=>{if($('review-dialog').open)updateRun();},30000);
+function updateRun(){const risk=refreshRisk();$('run').disabled=!risk.accepted||!reviewed||!device.connected||!$('ready-check').checked||busy;$('run-note').textContent=device.connected?'Run sends this reviewed job to the Cameo.':'Connect the Cameo using Chrome to run. Offline review is available now.';}
 function setBusy(value){busy=value;for(const el of document.querySelectorAll('.workspace input,.workspace select,.workspace button,#connect'))el.disabled=value;$('stop').disabled=!value;if(!value){render();$('connect').disabled=false;}updateRun();}
-async function run(){if(!reviewed||busy)return;const snapshot=reviewed;$('review-dialog').close();setBusy(true);
+async function run(){if(!reviewed||busy||!device.connected||!$('ready-check').checked)return;if(!refreshRisk().accepted){updateRun();return;}const snapshot=reviewed;$('review-dialog').close();setBusy(true);
  try{await device.run(snapshot,(p,label)=>{$('progress').value=p;$('progress-label').textContent=label;});}
  catch(err){$('progress-label').textContent=err.message;toast(err.message);}finally{setBusy(false);}}
 $('file').addEventListener('change',e=>importFile(e.target.files[0]));

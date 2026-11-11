@@ -11,5 +11,6 @@ for(const f of ['index.html','style.css'])await fs.copyFile(`web/${f}`,`dist/${f
 await fs.writeFile('dist/config.json',JSON.stringify({materials,sizes},null,2));
 await fs.copyFile('test-files/colour-protocol-test-70mm.dxf','dist/example.dxf');
 await fs.writeFile('dist/.nojekyll','');
+await fs.copyFile('LICENSE','dist/LICENSE');
 await fs.copyFile('node_modules/dxf-parser/LICENSE','dist/DXF-PARSER-LICENSE.txt');
 console.log('Built static app in dist/');

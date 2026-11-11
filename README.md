@@ -1,3 +1,9 @@
+> [!WARNING]
+> This software is vibe coded, untested, and used entirely at your own risk.
+
+> [!NOTE]
+> This project has no association with Silhouette, the company that makes the Cameo. It is not affiliated with, endorsed by, or supported by Silhouette.
+
 # Silhouette — Cut & Crease
 
 A static browser app for the **Silhouette Cameo 5 Alpha**. Import a DXF, position it on a sheet, choose a material preset, and send a job directly from Chrome over Bluetooth. Files stay in your browser; no backend is required.
@@ -89,3 +95,7 @@ All project commands are available in `scripts/`:
 In the repository’s **Settings → Pages**, select **GitHub Actions** as the deployment source. Pushes to `main` test and build the app. Run the **Static workbench** workflow manually to publish it after enabling Pages.
 
 The build uses relative asset paths, so repository Pages URLs are supported. You can also host `dist/` on any static HTTPS host. No API keys or secrets are required.
+
+## License
+
+[MIT](LICENSE).

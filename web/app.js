@@ -69,7 +69,7 @@ window.addEventListener('focus',()=>updateRun());
 document.addEventListener('visibilitychange',()=>{if(busy)device.log.push({time:new Date().toISOString(),direction:'event',type:'visibility-change',visibility:document.visibilityState});if(!document.hidden)updateRun();});
 setInterval(()=>{if(screen==='preview')updateRun();},30000);
 function updateRun(){const risk=refreshRisk();$('connect-next').disabled=!device.connected;$('wizard-next').disabled=busy||(screen==='connect'&&!device.connected)||(screen==='design'&&!job);$('run').disabled=!risk.accepted||!reviewed||!device.connected||!$('ready-check').checked||busy;$('run-note').textContent=device.connected?(dryRun?'Dry run only. No commands will be sent to hardware.':'Run sends this reviewed job to the Cameo.'):'Connect the Cameo using Chrome to continue.';}
-function setBusy(value){busy=value;for(const el of document.querySelectorAll('main input,main select,main button,#connect'))el.disabled=value;$('stop').disabled=!value;if(!value){render();$('connect').disabled=false;showScreen('run');}updateRun();}
+function setBusy(value){busy=value;if(!value){$('resume').hidden=true;$('resume-confirm').hidden=true;$('stop').hidden=false;}for(const el of document.querySelectorAll('main input,main select,main button,#connect'))el.disabled=value;$('stop').disabled=!value;$('reset-view').disabled=false;if(!value){render();$('connect').disabled=false;showScreen('run');}updateRun();}
 async function run(){if(!reviewed||busy||!device.connected||!$('ready-check').checked)return;if(!refreshRisk().accepted){updateRun();return;}const snapshot=reviewed;snapshot.build={commit:document.querySelector('.build-footer a').title,url:document.querySelector('.build-footer a').href};liveRun={job:snapshot,segments:previewSegments(snapshot),completed:-1,active:-1,phase:'starting'};$('progress').value=0;$('run-title').textContent=dryRun?'Simulating your job.':'Your job is in motion.';$('run-description').textContent=dryRun?'The simulated Cameo accepts every command without moving hardware.':'Keep the machine attended while it works.';hasRun=true;navigate('run');setBusy(true);
  try{await device.run(snapshot,(p,label,detail={})=>{$('progress').value=p;$('progress-label').textContent=label;liveRun.phase=detail.phase;liveRun.active=detail.stepIndex??-1;if(detail.phase==='completed')liveRun.completed=detail.stepIndex;paintRun();});$('run-title').textContent=dryRun?'Dry run complete.':'Your job is complete.';$('run-description').textContent=dryRun?'The full job was accepted by the simulated Cameo. No hardware commands were sent.':'The Cameo reports ready. Your activity log is available below.';}
  catch(err){$('run-title').textContent='Job stopped.';$('progress-label').textContent=err.message;toast(err.message);}finally{setBusy(false);}}
@@ -86,13 +86,16 @@ $('download').onclick=()=>{if(job)download('silhouette-job-report.json',JSON.str
 $('save-log').onclick=()=>download('silhouette-activity.json',JSON.stringify({version:2,build:{commit:document.querySelector('.build-footer a').title,url:document.querySelector('.build-footer a').href},mode:dryRun?'dry-run':'hardware',identity:device.identity||null,events:device.log},null,2));
 $('choose-dry-run').onclick=async()=>{if(busy||connecting)return;device.disconnect();dryRun=true;device=new DryRunCameo(connectionChanged);$('dry-run-banner').hidden=false;await device.connect();navigate('material');};
 $('connect').onclick=async()=>{if(busy||connecting)return;if(dryRun){device.disconnect();dryRun=false;device=new CameoBluetooth(connectionChanged);$('dry-run-banner').hidden=true;}if(device.connected){device.disconnect();return;}try{connecting=true;$('choose-dry-run').disabled=true;$('connect').disabled=true;$('connection').textContent='Choosing device…';await device.connect();navigate('material');}catch(err){toast(err.message);$('connection').textContent='Not connected';}finally{connecting=false;$('choose-dry-run').disabled=false;$('connect').disabled=false;updateRun();}};
-$('stop').onclick=()=>{device.stop();$('progress-label').textContent='Sending stopped. Press the machine’s pause button to halt buffered movement.';};
+$('stop').onclick=()=>{device.pause();$('stop').hidden=true;$('resume').hidden=false;$('resume').disabled=false;$('progress-label').textContent='Pause requested — the current operation will finish before sending pauses.';};
+$('resume').onclick=()=>{$('resume-confirm').hidden=false;$('confirm-resume').disabled=false;$('cancel-resume').disabled=false;};
+$('cancel-resume').onclick=()=>{$('resume-confirm').hidden=true;};
+$('confirm-resume').onclick=()=>{$('resume-confirm').hidden=true;$('resume').hidden=true;$('stop').hidden=false;device.resume();$('progress-label').textContent='Resuming sending…';};
 let drag=null;
 function coord(e){const p=new DOMPoint(e.clientX,e.clientY);return p.matrixTransform($('canvas').getScreenCTM().inverse());}
 function applyView(){if(view)$('canvas').setAttribute('viewBox',`${view.x} ${view.y} ${view.width} ${view.height}`);}
-$('reset-view').onclick=()=>{viewMat=null;render();};
+$('reset-view').onclick=()=>{const mat=MATS[viewMat];view={x:-18,y:-18,width:mat.width+36,height:mat.height+36};applyView();};
 $('canvas').addEventListener('wheel',e=>{
- if(!view||busy)return;e.preventDefault();
+ if(!view)return;e.preventDefault();
  const multiplier=e.deltaMode===1?16:e.deltaMode===2?$('canvas').clientHeight:1;
  if(e.ctrlKey){const mat=MATS[$('mat').value];view=zoomView(view,{width:mat.width+36,height:mat.height+36},e.deltaY*multiplier,coord(e));}
  else{const matrix=$('canvas').getScreenCTM();view=panView(view,e.deltaX*multiplier,e.deltaY*multiplier,view.width*matrix.a,view.height*matrix.d);}

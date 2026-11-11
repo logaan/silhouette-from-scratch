@@ -30,3 +30,23 @@ test('failed operations remain unconfirmed and are recorded with their index',as
  await assert.rejects(c.run({steps:[{label:'Cut',commands:['M0,0'],wait:true}]},(p,label,d)=>phases.push(d.phase)),/lost connection/);
  assert.deepEqual(phases,['sending','failed']);assert.equal(c.log.at(-1).type,'job-failed');assert.equal(c.log.at(-1).stepIndex,0);assert(!c.log.some(e=>e.type==='step-complete'));
 });
+test('pause finishes the current step and resumes remaining steps once after checking readiness',async()=>{
+ const c=new CameoBluetooth();c.connected=true;const writes=[];let checks=0;
+ c.ready=async()=>{checks++;};c.send=async bytes=>writes.push(new TextDecoder().decode(bytes));
+ let paused;const reached=new Promise(resolve=>paused=resolve);
+ const running=c.run({steps:[{label:'Cut 1',commands:['M0,0','D1,1'],wait:true},{label:'Cut 2',commands:['M2,2','D3,3'],wait:true}]},(p,label,d)=>{
+  if(d.phase==='sending'&&d.stepIndex===0)c.pause();
+  if(d.phase==='paused')paused();
+ });
+ await reached;assert.equal(writes.length,1);assert.equal(checks,2);assert(c.busy);
+ c.resume();await running;assert.equal(writes.length,2);assert.equal(checks,4);
+ assert.deepEqual(c.log.filter(e=>['sending-paused','sending-resumed'].includes(e.type)).map(e=>e.type),['sending-paused','sending-resumed']);
+});
+test('disconnect during a pause fails the job and cannot send remaining steps',async()=>{
+ const c=new CameoBluetooth();c.connected=true;c.ready=async()=>{};let writes=0;c.send=async()=>writes++;
+ let paused;const reached=new Promise(resolve=>paused=resolve);
+ const running=c.run({steps:[{label:'Cut 1',commands:['D1,1'],wait:true},{label:'Cut 2',commands:['D2,2'],wait:true}]},(p,label,d)=>{
+  if(d.phase==='sending')c.pause();if(d.phase==='paused')paused();
+ });
+ const rejected=assert.rejects(running,/Connection closed/);await reached;c.disconnect();await rejected;c.resume();assert.equal(writes,1);assert.equal(c.busy,false);
+});

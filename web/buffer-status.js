@@ -6,6 +6,6 @@ export function bufferNotice(run,dryRun=false){
   return 'Up to 1 operation may still be moving or buffered; completion is unconfirmed. No additional cut or crease operations are queued.';
  }
  if(pending&&step)return '0 cut or crease operations outstanding. Setup or return movement may still be active.';
- if(run.phase==='failed')return 'Buffer state unknown. No cut or crease operations were sent by this job.';
+ if(run.phase==='failed')return 'Buffer state unknown. No cut or crease operations remain unconfirmed by this job.';
  return '0 cut or crease operations outstanding.';
 }

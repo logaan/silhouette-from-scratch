@@ -1,8 +1,9 @@
+import {TransmissionPause} from './transmission-pause.js';
 import {jobActivity} from './job-activity.js';
 export const UUID={service:'e2088282-4fde-42f9-bb22-6ec3c7ed8f91',write:'6d92661d-f429-4d67-929b-28e7a9780912',read:'8dcf199a-30e7-4bd4-beb6-beb57dca866c',control:'61490654-b5b4-458c-a867-9e15bc1471e0'};
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 export class CameoBluetooth{
- constructor(onState=()=>{}){this.onState=onState;this.busy=false;this.connected=false;this.log=[];this.stopped=false;this.pending=null;this.rx=[];}
+ constructor(onState=()=>{}){this.transmission=new TransmissionPause();this.onState=onState;this.busy=false;this.connected=false;this.log=[];this.stopped=false;this.pending=null;this.rx=[];}
  record(direction,data){this.log.push({time:new Date().toISOString(),direction,hex:Array.from(data,b=>b.toString(16).padStart(2,'0')).join('')});if(this.log.length>100000)this.log.shift();}
  async reconnect(){
   if(!navigator.bluetooth?.getDevices)return false;
@@ -16,7 +17,7 @@ export class CameoBluetooth{
   if(!navigator.bluetooth)throw Error('Use Chrome on macOS with HTTPS or localhost for Bluetooth.');
   this.disconnect();this.stopped=false;
   this.device=knownDevice||await navigator.bluetooth.requestDevice({filters:[{services:[UUID.service]},{namePrefix:'CAMEO'}],optionalServices:[UUID.service]});
-  this.device.addEventListener('gattserverdisconnected',()=>{this.connected=false;this.stopped=true;this.pending?.reject(Error('Cameo disconnected. Job was not resumed.'));this.onState('Disconnected');});
+  this.device.addEventListener('gattserverdisconnected',()=>{this.connected=false;this.stopped=true;this.transmission.cancel();this.pending?.reject(Error('Cameo disconnected. Job was not resumed.'));this.onState('Disconnected');});
   try{
    const target=this.device;let expired=false,timer;
    const connection=target.gatt.connect().then(server=>{if(expired){target.gatt.disconnect();throw Error('Connection timed out');}return server;});
@@ -64,10 +65,13 @@ export class CameoBluetooth{
  }
  async run(job,onProgress=()=>{}){
   if(this.busy)throw Error('A job is already running');if(!this.connected)throw Error('Connect the Cameo first');
-  this.busy=true;this.stopped=false;
+  this.busy=true;this.stopped=false;this.transmission.resume();
   const event=jobActivity(job,this.log);let active=-1;
   try{await this.ready(10000);event('initial-ready');
    for(let i=0;i<job.steps.length;i++){
+    const resumed=await this.transmission.wait(()=>{event('sending-paused',{stepIndex:i});onProgress(i/job.steps.length,'Sending paused.',{phase:'paused',stepIndex:i-1});});
+    if(resumed){event('sending-resumed',{stepIndex:i});await this.ready();}
+    if(this.stopped||!this.connected)throw Error('Connection closed. Start a new job.');
     active=i;const step=job.steps[i],started=performance.now();
     event('step-start',{stepIndex:i,label:step.label,commandCount:step.commands.length});onProgress(i/job.steps.length,step.label,{phase:'sending',stepIndex:i});
     await this.send(new TextEncoder().encode(step.commands.join('\x03')+'\x03'));
@@ -76,8 +80,10 @@ export class CameoBluetooth{
     event('step-complete',{stepIndex:i,wait_ms:performance.now()-waiting,duration_ms:performance.now()-started});onProgress((i+1)/job.steps.length,step.label,{phase:'completed',stepIndex:i});
    }
    event('job-complete');onProgress(1,'Complete — device reports ready',{phase:'complete'});
-  }catch(error){event('job-failed',{stepIndex:active,message:error.message});onProgress(Math.max(0,active)/job.steps.length,error.message,{phase:'failed',stepIndex:active});throw error;}finally{this.busy=false;}
+  }catch(error){event('job-failed',{stepIndex:active,message:error.message});onProgress(Math.max(0,active)/job.steps.length,error.message,{phase:'failed',stepIndex:active});throw error;}finally{this.busy=false;this.transmission.resume();}
  }
- stop(){this.stopped=true;this.pending?.reject(Error('Sending stopped'));}
+ pause(){if(this.busy)this.transmission.pause();}
+ resume(){this.transmission.resume();}
+ stop(){this.transmission.cancel();this.stopped=true;this.pending?.reject(Error('Sending stopped'));}
  disconnect(){this.stop();this.device?.gatt?.disconnect();this.connected=false;}
 }

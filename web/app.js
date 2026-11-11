@@ -1,18 +1,21 @@
+import {panView,zoomView} from './viewport.js';
 import {parseDXF,positioned,bounds} from './geometry.js';
 import {compileJob,MATS} from './job.js';
 import {CameoBluetooth} from './bluetooth.js';
 const $=id=>document.getElementById(id),NS='http://www.w3.org/2000/svg';
+let view=null,viewMat=null;
 let config,drawing=null,job=null,reviewed=null,rawText='',busy=false;
 const device=new CameoBluetooth(state=>{$('connection').textContent=state;$('connect').textContent=device.connected?'Disconnect':'Connect Cameo ↗';updateRun();});
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;setTimeout(()=>$('toast').hidden=true,10000);}
 function node(tag,attrs,parent){const el=document.createElementNS(NS,tag);for(const [k,v]of Object.entries(attrs))el.setAttribute(k,v);parent.appendChild(el);return el;}
-function options(){const size=config.sizes.find(s=>s.id===$('sheet').value);return {mat:$('mat').value,sheetWidth:$('landscape').checked?size.height_mm:size.width_mm,sheetHeight:$('landscape').checked?size.width_mm:size.height_mm,x:Number($('x').value),y:Number($('y').value),rotation:Number($('rotation').value),scale:Number($('scale').value)/100,order:$('order').value};}
+function options(){const size=config.sizes.find(s=>s.id===$('sheet').value);return {mat:$('mat').value,sheetWidth:$('landscape').checked?size.height_mm:size.width_mm,sheetHeight:$('landscape').checked?size.width_mm:size.height_mm,x:Number($('x').value),y:Number($('y').value),rotation:Number($('rotation').value),order:$('order').value};}
 function preset(){const p=structuredClone(config.materials.find(p=>p.id===$('material').value));for(const op of ['cut','crease'])for(const key of ['force','speed','passes',...(op==='cut'?['depth']:[])])p[op][key]=Number($(`${op}-${key}`).value);return p;}
 function loadPreset(){const p=config.materials.find(p=>p.id===$('material').value);for(const op of ['cut','crease'])for(const key of ['force','speed','passes',...(op==='cut'?['depth']:[])])$(`${op}-${key}`).value=p[op][key];$('preset-note').textContent=p.notes||'';render();}
 function render(){
  if(!config)return;reviewed=null;job=null;
  const o=options(),mat=MATS[o.mat],art=$('mat-art'),draw=$('drawing-art');art.replaceChildren();draw.replaceChildren();
- $('canvas').setAttribute('viewBox',`-18 -18 ${mat.width+36} ${mat.height+36}`);$('mat-label').textContent=mat.name;
+ if(viewMat!==o.mat){viewMat=o.mat;view={x:-18,y:-18,width:mat.width+36,height:mat.height+36};}
+ applyView();$('mat-label').textContent=mat.name;
  node('rect',{x:-10,y:-10,width:mat.width+20,height:mat.height+20,rx:5,fill:'#e0e8da'},art);
  node('rect',{width:mat.width,height:mat.height,fill:'#f1f5ed',stroke:'#b0c4a6','stroke-width':.5},art);
  node('rect',{width:o.sheetWidth,height:o.sheetHeight,fill:'#fff',stroke:'#b4bdac','stroke-width':.5},art);
@@ -51,7 +54,7 @@ $('file').addEventListener('change',e=>importFile(e.target.files[0]));
 $('drop').addEventListener('dragover',e=>e.preventDefault());$('drop').addEventListener('drop',e=>{e.preventDefault();importFile(e.dataTransfer.files[0]);});
 $('example').onclick=async()=>{try{const response=await fetch('./example.dxf');if(!response.ok)throw Error('Example unavailable');await importText(await response.text(),'Colour protocol test · 70 mm');}catch(err){toast(err.message);}};
 $('units').onchange=()=>{if(rawText)importText(rawText,$('filename').textContent);};
-for(const id of ['mat','sheet','landscape','x','y','rotation','scale','order','show-ignored','cut-force','cut-speed','cut-depth','cut-passes','crease-force','crease-speed','crease-passes'])$(id).addEventListener('input',render);
+for(const id of ['mat','sheet','landscape','x','y','rotation','order','show-ignored','cut-force','cut-speed','cut-depth','cut-passes','crease-force','crease-speed','crease-passes'])$(id).addEventListener('input',render);
 $('material').onchange=loadPreset;$('reset').onclick=loadPreset;
 $('center').onclick=()=>{if(!drawing)return;const o=options(),b=bounds(positioned(drawing,{...o,x:0,y:0}));$('x').value=((o.sheetWidth-b.width)/2).toFixed(2);$('y').value=((o.sheetHeight-b.height)/2).toFixed(2);render();};
 $('review').onclick=review;$('ready-check').onchange=updateRun;$('run').onclick=run;
@@ -61,6 +64,15 @@ $('connect').onclick=async()=>{if(device.connected){device.disconnect();return;}
 $('stop').onclick=()=>{device.stop();$('progress-label').textContent='Sending stopped. Press the machine’s pause button to halt buffered movement.';};
 let drag=null;
 function coord(e){const p=new DOMPoint(e.clientX,e.clientY);return p.matrixTransform($('canvas').getScreenCTM().inverse());}
+function applyView(){if(view)$('canvas').setAttribute('viewBox',`${view.x} ${view.y} ${view.width} ${view.height}`);}
+$('reset-view').onclick=()=>{viewMat=null;render();};
+$('canvas').addEventListener('wheel',e=>{
+ if(!view)return;e.preventDefault();
+ const multiplier=e.deltaMode===1?16:e.deltaMode===2?$('canvas').clientHeight:1;
+ if(e.ctrlKey){const mat=MATS[$('mat').value];view=zoomView(view,{width:mat.width+36,height:mat.height+36},e.deltaY*multiplier,coord(e));}
+ else{const matrix=$('canvas').getScreenCTM();view=panView(view,e.deltaX*multiplier,e.deltaY*multiplier,view.width*matrix.a,view.height*matrix.d);}
+ applyView();
+},{passive:false});
 $('drawing-art').addEventListener('pointerdown',e=>{if(busy||!drawing)return;e.preventDefault();const p=coord(e);drag={px:p.x,py:p.y,x:Number($('x').value),y:Number($('y').value)};$('canvas').setPointerCapture(e.pointerId);});
 $('canvas').addEventListener('pointermove',e=>{if(!drag)return;const p=coord(e);$('x').value=Math.max(0,Math.round((drag.x+p.x-drag.px)*2)/2);$('y').value=Math.max(0,Math.round((drag.y+p.y-drag.py)*2)/2);render();});
 $('canvas').addEventListener('pointerup',()=>drag=null);$('canvas').addEventListener('pointercancel',()=>drag=null);

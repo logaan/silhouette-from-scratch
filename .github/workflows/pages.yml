@@ -17,13 +17,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm test
-      - run: npm run build
+      - run: bash scripts/setup.sh
+      - run: bash scripts/test.sh
+      - run: bash scripts/build.sh
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
   deploy:
+    if: github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-latest
     permissions:

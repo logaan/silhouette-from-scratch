@@ -1,5 +1,3 @@
-// GATT identifiers and handshake cross-checked against captured traffic and
-// https://github.com/fablabnbg/inkscape-silhouette/blob/main/silhouette/BLETransport.py
 export const UUID={service:'e2088282-4fde-42f9-bb22-6ec3c7ed8f91',write:'6d92661d-f429-4d67-929b-28e7a9780912',read:'8dcf199a-30e7-4bd4-beb6-beb57dca866c',control:'61490654-b5b4-458c-a867-9e15bc1471e0'};
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 export class CameoBluetooth{
@@ -30,7 +28,6 @@ export class CameoBluetooth{
    if(this.stopped)throw Error('Sending stopped. Use the machine’s pause button to stop buffered movement.');
    if(!this.device?.gatt.connected)throw Error('Bluetooth disconnected');
    const chunk=data.slice(i,i+20);
-   // An uncertain write is never retried: duplicating a movement is worse than failing.
    let timer;
    try { await Promise.race([this.write.writeValueWithResponse(chunk),new Promise((_,reject)=>{timer=setTimeout(()=>{this.disconnect();reject(Error('Bluetooth write timed out; connection closed.'));},10000);})]); } finally {clearTimeout(timer);}
    this.record('write',chunk);
@@ -40,7 +37,7 @@ export class CameoBluetooth{
   if(this.pending)throw Error('Another query is pending');this.rx=[];
   let timer;
   const response=new Promise((resolve,reject)=>{this.pending={resolve,reject};timer=setTimeout(()=>reject(Error('No response from Cameo')),timeout);});
-  response.catch(()=>{}); // A disconnect may reject while the acknowledged write is pending.
+  response.catch(()=>{});
   try{await this.send(data);return await response;}finally{clearTimeout(timer);this.pending=null;response.catch(()=>{});}
  }
  async ready(timeout=120000){

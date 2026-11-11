@@ -2,7 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import {parseDXF,positioned,bounds,RED,BLUE} from '../web/geometry.js';import {compileJob} from '../web/job.js';import {parse} from 'yaml';
 const example=fs.readFileSync('test-files/colour-protocol-test-70mm.dxf','utf8'),drawing=parseDXF(example);
 const material=parse(fs.readFileSync('materials/quill-100gsm-tracing-paper.yaml','utf8'));
-const options={mat:'12x12',sheetWidth:210,sheetHeight:297,x:10,y:10,rotation:0,scale:1,order:'crease-first'};
+const options={mat:'12x12',sheetWidth:210,sheetHeight:297,x:10,y:10,rotation:0,order:'crease-first'};
 function tiny(entities,layers=''){return `0\nSECTION\n2\nHEADER\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n${layers}0\nSECTION\n2\nENTITIES\n${entities}0\nENDSEC\n0\nEOF\n`;}
 function line(handle,colour,more=''){return `0\nLINE\n5\n${handle}\n8\n0\n62\n${colour}\n${more}10\n0\n20\n0\n11\n10\n21\n10\n`;}
 test('DXF fixture preserves full bounds and exact colours',()=>{assert.deepEqual(drawing.counts,{cut:3,crease:3,ignored:3});assert.equal(drawing.width,70);assert.equal(drawing.height,70);});

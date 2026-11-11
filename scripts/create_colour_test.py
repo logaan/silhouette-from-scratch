@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Generate a passive import fixture, not a hardware session. Requires ezdxf."""
 from pathlib import Path
 import ezdxf
 from ezdxf import bbox
@@ -20,15 +19,15 @@ def poly(points, layer, closed=False):
     m.add_lwpolyline(points, close=closed, dxfattribs=attrs(layer))
 def line(a,b,layer):
     m.add_line(a,b,dxfattribs=attrs(layer))
-# Closed paths: distinct dimensions distinguish contour order and direction.
+
 poly([(5,43),(25,43),(25,60),(5,60)], 'RED_CUT', True)
 poly([(32,43),(49,43),(37,61)], 'RED_CUT', True)
 m.add_circle((59,53), 6, dxfattribs=attrs('RED_CUT'))
-# Open paths: single line, connected zigzag, and true circular arc.
+
 line((6,8),(6,31),'BLUE_CREASE')
 poly([(14,10),(22,10),(22,17),(30,17),(30,28)],'BLUE_CREASE')
 m.add_arc((49,17), 10, 0, 180, dxfattribs=attrs('BLUE_CREASE'))
-# Ignored geometry: full bounding box plus an unmistakable X.
+
 poly([(0,0),(70,0),(70,70),(0,70)],'BLACK_IGNORE',True)
 line((56,32),(64,40),'BLACK_IGNORE')
 line((56,40),(64,32),'BLACK_IGNORE')
@@ -43,7 +42,7 @@ assert len(loaded.modelspace()) == 9
 for layer in styles:
     assert len([e for e in loaded.modelspace() if e.dxf.layer == layer]) == 3
 print(f'Validated: {path}; 70 x 70 mm, 9 entities, 3 per colour, no DXF audit errors.')
-# Matching preview with conventional DXF positive-Y-up coordinates.
+
 (ROOT/'colour-protocol-test-70mm.svg').write_text('''<svg xmlns="http://www.w3.org/2000/svg" viewBox="-3 -3 76 76" width="608" height="608">
 <rect x="-3" y="-3" width="76" height="76" fill="white"/>
 <g transform="translate(0 70) scale(1 -1)" fill="none" stroke-width="0.35">

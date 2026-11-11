@@ -36,7 +36,6 @@ function entityPoints(e){
     default:throw Error(`${e.type} is unsupported. Convert it to lines or polylines before importing.`);
   }
 }
-// Preserve true-colour precedence, including layer true colours omitted by dxf-parser.
 function rawMetadata(text){
  const lines=text.split(/\r?\n/), records=[];let rec=null;
  for(let i=0;i+1<lines.length;i+=2){const code=Number(lines[i].trim()),value=lines[i+1].trim();if(code===0){rec={type:value,tags:{}};records.push(rec);}else if(rec)rec.tags[code]=value;}
@@ -75,7 +74,6 @@ export function parseDXF(text,unitOverride=null){
   counts[operation]++;paths.push({operation,points:pts,entity:e.type,handle:e.handle});
  }
  for(const e of d.entities||[])visit(e);
- // Reject unsupported top-level entities that the parser silently omitted.
  let inEntities=false;const parsed=new Set((d.entities||[]).map(e=>e.handle));
  for(const r of records){if(r.type==='SECTION')inEntities=r.tags[2]==='ENTITIES';if(r.type==='ENDSEC')inEntities=false;
   if(inEntities&&r.tags[5]&&!parsed.has(r.tags[5])&&!['VERTEX','SEQEND'].includes(r.type)){
@@ -84,14 +82,14 @@ export function parseDXF(text,unitOverride=null){
   }
  }
  if(!counts.cut&&!counts.crease)throw Error('No pure red or pure blue geometry found');
- const b=bounds(paths); // Keep ignored reference geometry for placement, never for output.
+ const b=bounds(paths);
  for(const p of paths)p.points=p.points.map(([x,y])=>[x-b.minX,b.maxY-y]);
  return {paths,counts,width:b.width,height:b.height,units:declared,factor,warnings};
 }
-export function positioned(drawing,{x=0,y=0,rotation=0,scale=1}){
- if(![x,y,rotation,scale].every(finite)||scale<=0||scale>10)throw Error('Invalid placement');
+export function positioned(drawing,{x=0,y=0,rotation=0}){
+ if(![x,y,rotation].every(finite))throw Error('Invalid placement');
  const a=rotation*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
- const paths=drawing.paths.map(p=>({...p,points:p.points.map(([px,py])=>[(px*c-py*s)*scale,(px*s+py*c)*scale])}));
+ const paths=drawing.paths.map(p=>({...p,points:p.points.map(([px,py])=>[px*c-py*s,px*s+py*c])}));
  const b=bounds(paths);return paths.map(p=>({...p,points:p.points.map(([px,py])=>[px-b.minX+x,py-b.minY+y])}));
 }
 export function validateSettings(preset){

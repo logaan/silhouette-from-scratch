@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""Offline, heuristic Silhouette GPGL extraction from Bluetooth captures.
-
-Requires Wireshark tshark. Never connects to or transmits to a cutter.
-"""
 import argparse
 import hashlib
 import json
@@ -17,7 +13,6 @@ SETTING = {'!': 'speed', 'FX': 'force', 'TF': 'blade_depth', 'TJ': 'acceleration
 
 
 def decode(rows):
-    """Reassemble ETX-delimited commands per outgoing attribute stream."""
     commands, queries, pending = [], [], bytearray()
     start = None
     for row in rows:
@@ -39,10 +34,6 @@ def decode(rows):
 
 
 def binary_deltas(raw):
-    """Decode GPGL BE1/2/3 relative coordinate pairs (base-224 digits).
-
-    Reference: inkscape-silhouette/silhouette/beutil.py.
-    """
     mode = raw[:3]
     width, span, bias = {b'BE1': (2,224,112), b'BE2': (3,3352,1676),
                          b'BE3': (5,750964,375482)}[mode]
@@ -84,7 +75,7 @@ def interpret(commands):
             if len(values) % 2:
                 unsupported.append(s)
                 continue
-            # Silhouette driver uses wire order y,x, 20 units per millimetre.
+
             pts = [[values[i+1], values[i]] for i in range(0, len(values), 2)]
             if motion[1] == 'M':
                 finish()
@@ -94,7 +85,7 @@ def interpret(commands):
             else:
                 unsupported.append(s)
         elif s.startswith(('BE', 'BZ', 'E', 'W', '/', '&', 'SO', 'O')):
-            # Do not silently join known paths across unsupported motion/transforms.
+
             finish()
             unsupported.append(s)
     finish()
@@ -134,7 +125,6 @@ def read_rows(path, tshark):
 
 
 def summarize_jobs(commands):
-    """TG starts observed Studio jobs; H ends them. Preserve partial jobs."""
     groups, current = [], []
     for cmd in commands:
         if re.fullmatch(r'TG\d+', cmd['text']) and current:
@@ -151,7 +141,7 @@ def summarize_jobs(commands):
         history, paths, unsupported = interpret(group)
         if not paths:
             continue
-        # Count exact ordered repeats, not translated shapes or unrelated jobs.
+
         signatures = [json.dumps(p['points_xy_units']) for p in paths]
         period = len(paths)
         for n in range(1, len(paths)+1):
@@ -215,7 +205,7 @@ def extract(rows):
     for (connection, attribute), writes in groups.items():
         commands, queries, trailing = decode(writes)
         settings, paths, unsupported = interpret(commands)
-        # Require multiple protocol clues, not a fixed device address or ATT handle.
+
         kinds = {s['setting'] for s in settings}
         if len(kinds) < 2 and not (paths and kinds):
             continue
@@ -243,7 +233,7 @@ def svg(paths):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Extract likely Silhouette Bluetooth data from a capture.')
     parser.add_argument('capture', type=Path)
     parser.add_argument('--output', type=Path, required=True, help='New output directory (must not exist)')
     parser.add_argument('--tshark', default=shutil.which('tshark') or '/Applications/Wireshark.app/Contents/MacOS/tshark')

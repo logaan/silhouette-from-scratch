@@ -3,9 +3,9 @@ import {optimisePaths} from './order.js';
 import {bounds,positioned,validateSettings} from './geometry.js';
 export const MATS={'12x12':{name:'12 × 12 in',width:304.8,height:304.8,code:1},'12x24':{name:'12 × 24 in',width:304.8,height:609.6,code:2}};
 const su=n=>Math.round(n*20);
-export const OPTIMISATIONS=['join','reorder','collinear','reversePasses','creaseBridges','continuousCreases'];
+export const OPTIMISATIONS=['join','reorder','collinear','reversePasses','creaseBridges','continuousCreases','batching'];
 export function optimisationSettings(options){
- return options.optimisations?Object.fromEntries(OPTIMISATIONS.map(key=>[key,options.optimisations[key]===true])):{join:!!options.optimise,reorder:!!options.optimise,collinear:!!options.optimise,reversePasses:!!options.optimise,creaseBridges:!!options.optimise&&!!options.creaseBridges,continuousCreases:false};
+ return options.optimisations?Object.fromEntries(OPTIMISATIONS.map(key=>[key,options.optimisations[key]===true])):{join:!!options.optimise,reorder:!!options.optimise,collinear:!!options.optimise,reversePasses:!!options.optimise,creaseBridges:!!options.optimise&&!!options.creaseBridges,continuousCreases:false,batching:false};
 }
 export const operationCount=job=>job.operations.reduce((n,o)=>n+(o.operationCount??o.pathCount*o.passes),0);
 export function compileJob(drawing,options,preset){
@@ -20,7 +20,14 @@ export function compileJob(drawing,options,preset){
  if(b.minX<margin||b.minY<margin||b.maxX>sheetWidth-margin||b.maxY>sheetHeight-margin)throw Error('Keep cut and crease paths at least 3 mm inside the material edges.');
  if(!['crease-first','cut-first'].includes(options.order))throw Error('Invalid operation order');
  const groups=options.order==='cut-first'?['cut','crease']:['crease','cut'];
- const steps=[{label:'Set mat',commands:[`TG${mat.code}`,'FN0','TB50,0','FM0','TR0,1','\\0,0',`Z${su(mat.height)},${su(mat.width)}`],wait:true}],operations=[];
+ const preparation={enabled:options.prepareTracking===true,feedMm:options.prepareTracking===true?279.8:0};
+ const initial=[`TG${mat.code}`,'FN0','TB50,0','FM0','TR0,1'];
+ const area=['FY1','\\0,0',`Z${su(mat.height)},${su(mat.width)}`],operations=[];
+ const steps=preparation.enabled?[
+  {label:`Prepare material tracking · ${preparation.feedMm} mm feed and return`,commands:[...initial,'FY0',`FU${su(preparation.feedMm)}`],wait:true},
+  {label:'Set working area',commands:area,wait:true}
+ ]:[{label:'Set mat',commands:[...initial,...area],wait:true}];
+
  const orderedPaths=[],bridges=[];let bridgeLimited=false;
  for(const op of groups){
   const continuous=op==='crease'&&flags.continuousCreases,reverse=flags.reversePasses||continuous,ordering={...flags,passes:preset[op].passes,reversePasses:reverse};
@@ -55,5 +62,5 @@ export function compileJob(drawing,options,preset){
  steps.push({label:'Return to origin',commands:['L0','\\0,0','M0,0','TR0,0','J1','FN0','TB50,0'],wait:true});
  const bytes=steps.reduce((sum,s)=>sum+s.commands.join('\x03').length+s.commands.length,0);
  if(bytes>5_000_000)throw Error('Job exceeds 5 MB of commands');
- return {version:1,kind:'generated-dxf-job',mat:options.mat,sheet:{width:sheetWidth,height:sheetHeight},material:preset.name,options:structuredClone(options),operations,bridges,bridgeLimited,paths:orderedPaths,ignored:drawing.counts.ignored,steps,bytes,bounds:b};
+ return {version:1,kind:'generated-dxf-job',mat:options.mat,sheet:{width:sheetWidth,height:sheetHeight},material:preset.name,options:structuredClone(options),preparation,operations,bridges,bridgeLimited,paths:orderedPaths,ignored:drawing.counts.ignored,steps,bytes,bounds:b};
 }

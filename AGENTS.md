@@ -2,7 +2,7 @@
 
 - Do not write code comments. Interpreter directives such as shebangs are permitted.
 - Do not create documentation files. Maintain only the existing README.md and this AGENTS.md when requested or needed for accuracy.
-- Build a static Chrome Web Bluetooth application suitable for GitHub Pages. No hosted backend or capture replay. The explicitly enabled localhost buffer experiment may use a local control/logging server.
+- Build a static Chrome Web Bluetooth application suitable for GitHub Pages. No backend or capture replay.
 - Cut only pure red (#FF0000); crease pure blue (#0000FF). With cut-line joining enabled, creasing may also follow red geometry to connect blue paths before cutting. Ignore every other colour.
 - Store materials and material sizes in individual YAML files in their respective folders.
 - Commit as you work: make small, coherent commits after relevant checks pass. Do not leave completed work uncommitted.

@@ -28,7 +28,7 @@ Open [localhost:4173](http://127.0.0.1:4173) in Chrome. Bluetooth requires HTTPS
 ## Use
 
 1. Close Silhouette Studio and connect the Cameo in Chrome.
-2. Select a material. Its default mat and sheet size are selected automatically and can be changed.
+2. Select a material. Its default mat and sheet size are selected automatically and can be changed. Tracking preparation is enabled by default: before the job, it uses the observed 279.8 mm feed-and-return cycle to help roller grip and repeat-pass alignment. This is not obstruction detection; keep space clear in front of and behind the machine. Uncheck it to skip preparation.
 3. Import a DXF or try the included colour test or eight-compartment box. Position the drawing with the mat preview; keep active paths at least 3 mm inside the sheet edges.
 4. Preview the operation sequence. Automatic optimisation joins touching paths and starts each operation group nearest the top-left corner. It chooses subsequent paths from the tool’s current endpoint, can reverse open paths, and chooses nearby entry vertices on closed shapes. Collinear moves receive a small preference, with horizontal moves favoured. Repeat passes reverse direction to avoid return trips. Each optimisation has its own checkbox, enabled by default. Turn all of them off to preserve the original path order within each operation group. Continuous repeat creasing keeps the emboss tool down while traversing each path back and forth for the selected number of passes; cuts retain separate passes. Cut-line joining is enabled by default when creasing first: short red sections can connect blue creases without lifting, and added creasing appears in teal. Turn this off independently if desired. Preview controls provide reset, rewind, previous operation, play/pause, next operation and fast forward; animation speed is illustrative.
 5. Load the mat, check the tools and settings, acknowledge the risk, and run the job.
@@ -37,7 +37,9 @@ Click an earlier step heading, use the wizard’s Back button, or use browser Ba
 
 Machine Activity highlights outstanding paths and marks operations complete when the Cameo reports ready. It does not estimate exact tool position or which buffered path is moving. Activity logs include the build, job settings, send/wait timings, batch completion and polling timer mode. A worker runs the polling timer to reduce background-tab delays; browser and operating-system suspension can still interrupt progress.
 
-**Pause sending** pauses before the next operation, or after already-sent work in the local buffer experiment. Resume requires inline confirmation and continues without replaying completed work. Use the Cameo’s physical pause button to stop movement already buffered in the machine.
+Buffering is enabled by default: up to four operations with a 2 KB batch target, without crossing setup or tool-change boundaries. A single continuous operation is never split, even if it exceeds that byte target. Disable buffering to wait after every operation.
+
+**Pause sending** pauses after already-sent work finishes. Resume requires inline confirmation and continues without replaying completed work. Use the Cameo’s physical pause button to stop movement already buffered in the machine.
 
 ## Presets
 
@@ -89,8 +91,6 @@ All project commands are available in `scripts/`:
 | `setup.sh` | Install application dependencies |
 | `build.sh` | Build the static site in `dist/` |
 | `serve.sh` | Serve the local preview |
-| `buffer-lab.sh` | Start the local-only buffer experiment on port 4177; raw telemetry stays in ignored captures |
-| `buffer-control.sh` | Inspect the experiment with `state`, set a batch target with `limit COUNT --bytes BYTES`, or request `pause` |
 | `test.sh` | Run application and capture-parser tests |
 | `analyze-capture.sh` | Extract Silhouette data from a Bluetooth capture; requires Wireshark’s `tshark` |
 | `setup-capture-tools.sh` | Install Python dependencies for fixture generation |

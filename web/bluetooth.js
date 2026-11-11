@@ -71,9 +71,8 @@ export class CameoBluetooth{
   const event=jobActivity(job,this.log,this.simulated?'dry-run':'hardware');let active=-1,outstanding=[],completed=-1,batchId=0;this.pollClock=this.simulated?null:new PollClock(mode=>event('polling-timer',{mode}));
   try{await this.ready(10000);event('initial-ready');
    for(let i=0;i<job.steps.length;){
-    await this.beforeBatch?.();
     const resumed=await this.transmission.wait(()=>{event('sending-paused',{stepIndex:i});onProgress(i/job.steps.length,'Sending paused.',{phase:'paused',stepIndex:completed,outstanding:[]});});
-    if(resumed){event('sending-resumed',{stepIndex:i});await this.beforeBatch?.();await this.ready();}
+    if(resumed){event('sending-resumed',{stepIndex:i});await this.ready();}
     if(this.stopped||!this.connected)throw Error('Connection closed. Start a new job.');
     const batch=operationBatch(job,i,this.batchLimit,this.batchBytes),batchStart=performance.now(),sentAt=new Map();batchId++;outstanding=[];
     event('batch-start',{batchId,indices:batch.indices,bytes:batch.bytes,operation:batch.operation,limit:this.batchLimit||1,byteLimit:this.batchBytes||4096});

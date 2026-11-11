@@ -23,10 +23,10 @@ test('touching-path joining and nearby ordering can be selected independently',(
  assert.equal(optimisePaths(paths,{join:false,reorder:true}).length,3);
  assert.deepEqual(optimisePaths(paths,{join:false,reorder:true})[0].points[0],[0,0]);
 });
-test('all 64 option combinations preserve required box geometry and passes',()=>{
+test('all option combinations preserve required box geometry and passes',()=>{
  const drawing=parseDXF(fs.readFileSync('test-files/foldover-8-compartment-box.dxf','utf8')),p={...preset,cut:{...preset.cut,passes:1},crease:{...preset.crease,passes:2}},o={...options,x:0,y:0};
  const original=compileJob(drawing,{...o,optimisations:flags([])},p),expected=drawn(original);assert.equal(operationCount(original),498);
- for(let bits=0;bits<64;bits++){
+ for(let bits=0;bits<2**OPTIMISATIONS.length;bits++){
   const optimisations=Object.fromEntries(OPTIMISATIONS.map((k,i)=>[k,!!(bits&(1<<i))])),job=compileJob(drawing,{...o,optimisations},p);
   assert.deepEqual(drawn(job),expected,JSON.stringify(optimisations));assert.equal(operationCount(job),job.steps.filter(s=>/^(Cut|Crease) /.test(s.label)).length);
   if(!optimisations.creaseBridges)assert.equal(job.bridges.length,0);

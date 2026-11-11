@@ -1,0 +1,25 @@
+Silhouette colour protocol fixture — 70 x 70 mm (2.756 x 2.756 inches)
+
+Open colour-protocol-test-70mm.dxf in Silhouette Studio. Confirm the whole
+selection is 70 x 70 mm after import (DXF import scaling can vary).
+Use Cut by Line Colour:
+  Red (#FF0000): cut — 20 x 17 mm rectangle, scalene triangle, 12 mm circle.
+  Blue (#0000FF): crease — 23 mm line, open stepped path, radius 10 mm semicircle.
+  Black (#000000): disable/ignore — 70 mm border and separate X.
+The black entities define the full drawing size; do not cut the border.
+
+Explicit entity colours and matching layers are included. Black also uses
+DXF colour index 7, which some CAD viewers display as white on dark backgrounds.
+Check imported line colours before sending. The file contains geometry only:
+cut/crease/ignore actions and material settings must be assigned in Studio.
+
+Start the trace before device connection if practical. Run the drawing as one
+job. Keep screenshots of all colour-row settings, including colour order,
+tool, action, force, speed, blade depth and passes. Use settings appropriate
+for your paper; geometry is kept separate to make each colour recognisable.
+Record whether Studio permits a distinct crease action for the selected tool.
+
+Purpose: distinguish closed/open paths, straight/curved motion, colour-group
+ordering and setting transitions; verify ignored geometry never appears as
+cutting motion. Compare relative geometry rather than absolute placement.
+No hardware commands are generated or transmitted by the fixture generator.

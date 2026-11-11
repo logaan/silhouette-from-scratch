@@ -1,0 +1,15 @@
+id: quill-100gsm-test-cut
+name: Quill 100gsm — test-cut settings
+notes: Cut settings from the first job in the second trace; crease settings from the two-colour experiment.
+source: Second and third traces supplied by the user
+cut:
+  tool: 1
+  force: 20
+  speed: 11
+  depth: 2
+  passes: 1
+crease:
+  tool: 2
+  force: 33
+  speed: 5
+  passes: 2

@@ -1,0 +1,15 @@
+id: quill-100gsm-tracing-paper
+name: Quill 100gsm Tracing Paper
+notes: Settings observed in the two-colour capture. Physical cut quality still needs confirmation.
+source: Third trace and screenshots supplied by the user
+cut:
+  tool: 1
+  force: 20
+  speed: 30
+  depth: 8
+  passes: 1
+crease:
+  tool: 2
+  force: 33
+  speed: 5
+  passes: 2

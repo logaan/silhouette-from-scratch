@@ -1,3 +1,4 @@
+import {exportDXF} from './dxf-export.js';
 import {PreviewTimeline} from './preview-timeline.js';
 import {bufferNotice} from './buffer-status.js';
 import {DryRunCameo,isDryRun} from './dry-run.js';
@@ -42,7 +43,7 @@ function render(){
   job=compileJob(drawing,o,preset());valid=true;
   $('validation').textContent=`Fits your material. ${job.operations.map(op=>`${op.pathCount} ${op.operation} paths × ${op.passes} pass${op.passes>1?'es':''}`).join(' · ')}.`;
  }catch(err){$('validation').textContent=err.message;}
- $('validation').classList.toggle('invalid',!!drawing&&!valid);$('review').disabled=!valid||busy;$('download').disabled=!valid||busy;updateRun();if(screen==='preview'&&job)review();if(screen==='run')paintRun();
+ $('validation').classList.toggle('invalid',!!drawing&&!valid);$('review').disabled=!valid||busy;$('download').disabled=!valid||busy;$('download-dxf').disabled=!valid||busy;updateRun();if(screen==='preview'&&job)review();if(screen==='run')paintRun();
 }
 async function importText(text,name){try{const parsed=parseDXF(text,$('units').value==='auto'?null:$('units').value);rawText=text;drawing=parsed;$('filename').textContent=name;centreDrawing();}catch(err){drawing=null;rawText=text;$('filename').textContent=name;render();toast(err.message);}}
 async function importFile(file){if(screen!=='design'||busy)return;if(!file)return;if(file.size>10_000_000)return toast('File exceeds 10 MB');await importText(await file.text(),file.name);}
@@ -85,6 +86,7 @@ $('material').onchange=loadPreset;$('reset').onclick=loadPreset;
 function centreDrawing(){if(!drawing)return;const o=options(),b=bounds(positioned(drawing,{...o,x:0,y:0}));$('x').value=((o.sheetWidth-b.width)/2).toFixed(2);$('y').value=((o.sheetHeight-b.height)/2).toFixed(2);render();}
 $('center').onclick=centreDrawing;
 $('review').onclick=review;$('ready-check').onchange=updateRun;$('run').onclick=run;
+$('download-dxf').onclick=()=>{if(!job||busy)return;try{const stem=$('filename').textContent.replace(/\.dxf$/i,'').replace(/[<>:"/\\|?*]/g,'-').slice(0,100)||'design';download(stem+'-optimised.dxf',exportDXF(job),'application/dxf');}catch(error){toast(error.message);}};
 $('download').onclick=()=>{if(job)download('silhouette-job-report.json',JSON.stringify(job,null,2));};
 $('save-log').onclick=()=>download('silhouette-activity.json',JSON.stringify({version:2,build:{commit:document.querySelector('.build-footer a').title,url:document.querySelector('.build-footer a').href},mode:dryRun?'dry-run':'hardware',identity:device.identity||null,events:device.log},null,2));
 $('choose-dry-run').onclick=async()=>{if(busy||connecting)return;device.disconnect();dryRun=true;device=new DryRunCameo(connectionChanged);$('dry-run-banner').hidden=false;await device.connect();navigate('material');};

@@ -1,0 +1,13 @@
+id: coke-box
+name: Coke Box
+cut:
+  tool: 1
+  force: 14
+  speed: 5
+  depth: 10
+  passes: 3
+crease:
+  tool: 2
+  force: 14
+  speed: 3
+  passes: 2

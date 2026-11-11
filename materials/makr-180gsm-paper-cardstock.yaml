@@ -1,0 +1,13 @@
+id: makr-180gsm-paper-cardstock
+name: Makr 180gsm Paper Cardstock
+cut:
+  tool: 1
+  force: 15
+  speed: 30
+  depth: 4
+  passes: 1
+crease:
+  tool: 2
+  force: 33
+  speed: 30
+  passes: 2

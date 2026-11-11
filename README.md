@@ -67,7 +67,7 @@ width_mm: 210
 height_mm: 297
 ```
 
-Material presets can also include `notes` and `source`. IDs must be unique within each folder.
+IDs must be unique within each folder.
 
 ## DXF support
 

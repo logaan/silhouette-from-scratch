@@ -92,7 +92,7 @@ All project commands are available in `scripts/`:
 
 ## GitHub Pages
 
-In the repository’s **Settings → Pages**, select **GitHub Actions** as the deployment source. Pushes to `main` test and build the app. Run the **Static workbench** workflow manually to publish it after enabling Pages.
+In the repository’s **Settings → Pages**, select **GitHub Actions** as the deployment source. After enabling Pages, pushes to `main` test, build, and publish the app. You can also run the **Static workbench** workflow manually.
 
 The build uses relative asset paths, so repository Pages URLs are supported. You can also host `dist/` on any static HTTPS host. No API keys or secrets are required.
 

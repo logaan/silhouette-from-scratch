@@ -1,5 +1,7 @@
 id: coke-box
 name: Coke Box
+mat: 12x12
+size: a4
 cut:
   tool: 1
   force: 14

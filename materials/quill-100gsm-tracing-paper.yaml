@@ -1,5 +1,7 @@
 id: quill-100gsm-tracing-paper
 name: Quill 100gsm Tracing Paper
+mat: 12x24
+size: a3
 cut:
   tool: 1
   force: 20

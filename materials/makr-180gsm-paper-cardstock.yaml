@@ -1,5 +1,7 @@
 id: makr-180gsm-paper-cardstock
 name: Makr 180gsm Paper Cardstock
+mat: 12x12
+size: 300-square
 cut:
   tool: 1
   force: 15

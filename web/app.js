@@ -1,3 +1,4 @@
+import {previewSegments} from './order.js';
 import {RISK_KEY,acknowledgementState,acknowledge} from './acknowledgement.js';
 import {panView,zoomView} from './viewport.js';
 import {parseDXF,positioned,bounds} from './geometry.js';
@@ -5,13 +6,13 @@ import {compileJob,MATS} from './job.js';
 import {CameoBluetooth} from './bluetooth.js';
 const $=id=>document.getElementById(id),NS='http://www.w3.org/2000/svg';
 let view=null,viewMat=null;
-let config,drawing=null,job=null,reviewed=null,rawText='',busy=false;
+let config,drawing=null,job=null,reviewed=null,rawText='',busy=false,hasRun=false;
 const device=new CameoBluetooth(state=>{$('connection').textContent=state;$('connect').textContent=device.connected?'Disconnect':'Connect Cameo ↗';updateRun();});
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;setTimeout(()=>$('toast').hidden=true,10000);}
 function node(tag,attrs,parent){const el=document.createElementNS(NS,tag);for(const [k,v]of Object.entries(attrs))el.setAttribute(k,v);parent.appendChild(el);return el;}
-function options(){const size=config.sizes.find(s=>s.id===$('sheet').value);return {mat:$('mat').value,sheetWidth:$('landscape').checked?size.height_mm:size.width_mm,sheetHeight:$('landscape').checked?size.width_mm:size.height_mm,x:Number($('x').value),y:Number($('y').value),rotation:Number($('rotation').value),order:$('order').value};}
+function options(){const size=config.sizes.find(s=>s.id===$('sheet').value);return {mat:$('mat').value,sheetWidth:$('landscape').checked?size.height_mm:size.width_mm,sheetHeight:$('landscape').checked?size.width_mm:size.height_mm,x:Number($('x').value),y:Number($('y').value),rotation:Number($('rotation').value),order:$('order').value,optimise:$('optimise').checked};}
 function preset(){const p=structuredClone(config.materials.find(p=>p.id===$('material').value));for(const op of ['cut','crease'])for(const key of ['force','speed','passes',...(op==='cut'?['depth']:[])])p[op][key]=Number($(`${op}-${key}`).value);return p;}
-function loadPreset(){const p=config.materials.find(p=>p.id===$('material').value);for(const op of ['cut','crease'])for(const key of ['force','speed','passes',...(op==='cut'?['depth']:[])])$(`${op}-${key}`).value=p[op][key];render();}
+function loadPreset(){const p=config.materials.find(p=>p.id===$('material').value);$('mat').value=p.mat;$('sheet').value=p.size;$('landscape').checked=false;for(const op of ['cut','crease'])for(const key of ['force','speed','passes',...(op==='cut'?['depth']:[])])$(`${op}-${key}`).value=p[op][key];render();}
 function render(){
  if(!config)return;reviewed=null;job=null;
  const o=options(),mat=MATS[o.mat],art=$('mat-art'),draw=$('drawing-art');art.replaceChildren();draw.replaceChildren();
@@ -35,17 +36,17 @@ function render(){
   job=compileJob(drawing,o,preset());valid=true;
   $('validation').textContent=`Fits your material. ${job.operations.map(op=>`${op.pathCount} ${op.operation} paths × ${op.passes} pass${op.passes>1?'es':''}`).join(' · ')}.`;
  }catch(err){$('validation').textContent=err.message;}
- $('validation').classList.toggle('invalid',!!drawing&&!valid);$('review').disabled=!valid||busy;$('download').disabled=!valid||busy;updateRun();
+ $('validation').classList.toggle('invalid',!!drawing&&!valid);$('review').disabled=!valid||busy;$('download').disabled=!valid||busy;updateRun();if(screen==='preview'&&job)review();
 }
 async function importText(text,name){try{const parsed=parseDXF(text,$('units').value==='auto'?null:$('units').value);rawText=text;drawing=parsed;$('filename').textContent=name;render();}catch(err){drawing=null;rawText=text;$('filename').textContent=name;render();toast(err.message);}}
-async function importFile(file){if(busy)return;if(!file)return;if(file.size>10_000_000)return toast('File exceeds 10 MB');await importText(await file.text(),file.name);}
+async function importFile(file){if(screen!=='design'||busy)return;if(!file)return;if(file.size>10_000_000)return toast('File exceeds 10 MB');await importText(await file.text(),file.name);}
 function download(name,data,type='application/json'){const url=URL.createObjectURL(new Blob([data],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function review(){if(!job)return;reviewed=structuredClone(job);const content=$('review-content');content.replaceChildren();
  const p=document.createElement('p');p.textContent=`${job.material} · ${MATS[job.mat].name} mat · ${job.sheet.width} × ${job.sheet.height} mm material`;content.appendChild(p);
  const table=document.createElement('table'),tr=document.createElement('tr');for(const h of ['Operation','Tool','Force','Speed','Depth','Passes']){const th=document.createElement('th');th.textContent=h;tr.appendChild(th);}table.appendChild(tr);
  for(const op of job.operations){const row=document.createElement('tr');for(const value of [op.operation,op.tool,op.force,op.speed,op.depth??'—',op.passes]){const td=document.createElement('td');td.textContent=value;row.appendChild(td);}table.appendChild(row);}content.appendChild(table);
  const note=document.createElement('p');note.textContent=`${job.ignored} ignored entities excluded. ${job.bytes.toLocaleString()} bytes prepared. Placement: ${job.options.x}, ${job.options.y} mm.`;content.appendChild(note);
- $('ready-check').checked=false;updateRun();$('review-dialog').showModal();}
+ $('ready-check').checked=false;updateRun();preparePreview();if(screen!=='preview')navigate('preview');}
 let riskRecord=null;
 function readRisk(){
  try{const raw=localStorage.getItem(RISK_KEY);riskRecord=raw?JSON.parse(raw):null;}catch{}
@@ -62,10 +63,10 @@ $('risk-check').addEventListener('change',()=>{try{saveRisk(acknowledge(readRisk
 window.addEventListener('storage',e=>{if(e.key===RISK_KEY||e.key===null)updateRun();});
 window.addEventListener('focus',()=>updateRun());
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)updateRun();});
-setInterval(()=>{if($('review-dialog').open)updateRun();},30000);
-function updateRun(){const risk=refreshRisk();$('run').disabled=!risk.accepted||!reviewed||!device.connected||!$('ready-check').checked||busy;$('run-note').textContent=device.connected?'Run sends this reviewed job to the Cameo.':'Connect the Cameo using Chrome to run. Offline review is available now.';}
-function setBusy(value){busy=value;for(const el of document.querySelectorAll('.workspace input,.workspace select,.workspace button,#connect'))el.disabled=value;$('stop').disabled=!value;if(!value){render();$('connect').disabled=false;}updateRun();}
-async function run(){if(!reviewed||busy||!device.connected||!$('ready-check').checked)return;if(!refreshRisk().accepted){updateRun();return;}const snapshot=reviewed;$('review-dialog').close();setBusy(true);
+setInterval(()=>{if(screen==='preview')updateRun();},30000);
+function updateRun(){const risk=refreshRisk();$('connect-next').disabled=!device.connected;$('wizard-next').disabled=busy||(screen==='connect'&&!device.connected)||(screen==='design'&&!job);$('run').disabled=!risk.accepted||!reviewed||!device.connected||!$('ready-check').checked||busy;$('run-note').textContent=device.connected?'Run sends this reviewed job to the Cameo.':'Connect the Cameo using Chrome to continue.';}
+function setBusy(value){busy=value;for(const el of document.querySelectorAll('main input,main select,main button,#connect'))el.disabled=value;$('stop').disabled=!value;if(!value){render();$('connect').disabled=false;showScreen('run');}updateRun();}
+async function run(){if(!reviewed||busy||!device.connected||!$('ready-check').checked)return;if(!refreshRisk().accepted){updateRun();return;}const snapshot=reviewed;hasRun=true;navigate('run');setBusy(true);
  try{await device.run(snapshot,(p,label)=>{$('progress').value=p;$('progress-label').textContent=label;});}
  catch(err){$('progress-label').textContent=err.message;toast(err.message);}finally{setBusy(false);}}
 $('file').addEventListener('change',e=>importFile(e.target.files[0]));
@@ -85,15 +86,63 @@ function coord(e){const p=new DOMPoint(e.clientX,e.clientY);return p.matrixTrans
 function applyView(){if(view)$('canvas').setAttribute('viewBox',`${view.x} ${view.y} ${view.width} ${view.height}`);}
 $('reset-view').onclick=()=>{viewMat=null;render();};
 $('canvas').addEventListener('wheel',e=>{
- if(!view)return;e.preventDefault();
+ if(!view||busy)return;e.preventDefault();
  const multiplier=e.deltaMode===1?16:e.deltaMode===2?$('canvas').clientHeight:1;
  if(e.ctrlKey){const mat=MATS[$('mat').value];view=zoomView(view,{width:mat.width+36,height:mat.height+36},e.deltaY*multiplier,coord(e));}
  else{const matrix=$('canvas').getScreenCTM();view=panView(view,e.deltaX*multiplier,e.deltaY*multiplier,view.width*matrix.a,view.height*matrix.d);}
  applyView();
 },{passive:false});
-$('drawing-art').addEventListener('pointerdown',e=>{if(busy||!drawing)return;e.preventDefault();const p=coord(e);drag={px:p.x,py:p.y,x:Number($('x').value),y:Number($('y').value)};$('canvas').setPointerCapture(e.pointerId);});
+$('drawing-art').addEventListener('pointerdown',e=>{if(screen!=='design'||busy||!drawing)return;e.preventDefault();const p=coord(e);drag={px:p.x,py:p.y,x:Number($('x').value),y:Number($('y').value)};$('canvas').setPointerCapture(e.pointerId);});
 $('canvas').addEventListener('pointermove',e=>{if(!drag)return;const p=coord(e);$('x').value=Math.max(0,Math.round((drag.x+p.x-drag.px)*2)/2);$('y').value=Math.max(0,Math.round((drag.y+p.y-drag.py)*2)/2);render();});
 $('canvas').addEventListener('pointerup',()=>drag=null);$('canvas').addEventListener('pointercancel',()=>drag=null);
-$('canvas').addEventListener('keydown',e=>{if(busy||!drawing)return;const delta={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];if(delta){e.preventDefault();$('x').value=Math.max(0,Number($('x').value)+delta[0]*(e.shiftKey?10:1));$('y').value=Math.max(0,Number($('y').value)+delta[1]*(e.shiftKey?10:1));render();}});
-window.addEventListener('beforeunload',e=>{if(busy){e.preventDefault();e.returnValue='';}});
-try{const res=await fetch('./config.json');if(!res.ok)throw Error('Material configuration unavailable. Run npm run build.');config=await res.json();for(const [id,items]of [['material',config.materials],['sheet',config.sizes]])for(const item of items){const op=document.createElement('option');op.value=item.id;op.textContent=item.name;$(id).appendChild(op);}$('sheet').value='a4';$('material').value='quill-100gsm-tracing-paper';loadPreset();if(!navigator.bluetooth)$('connection').textContent='Chrome required for Bluetooth';}catch(err){toast(err.message);}
+$('canvas').addEventListener('keydown',e=>{if(screen!=='design'||busy||!drawing)return;const delta={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];if(delta){e.preventDefault();$('x').value=Math.max(0,Number($('x').value)+delta[0]*(e.shiftKey?10:1));$('y').value=Math.max(0,Number($('y').value)+delta[1]*(e.shiftKey?10:1));render();}});
+
+const screens=['connect','material','design','preview','run'];
+let screen='connect',animation=null,segments=[],segmentIndex=0,segmentProgress=0,lastFrame=0;
+const materialPanel=document.querySelector('.panel.right>section');
+const paperPanel=document.querySelector('.panel.left>section:nth-child(2)');
+$('screen-material').append(materialPanel,paperPanel);
+const canvasPanel=document.querySelector('.canvas-panel');
+const canvasHome=document.createElement('div');canvasHome.hidden=true;canvasPanel.before(canvasHome);
+$('screen-preview').after($('screen-run'));
+$('wizard-nav').after($('screen-preview'));
+function showScreen(next){
+ if(!screens.includes(next))next='connect';
+ if(!device.connected&&next!=='connect'&&!busy)next='connect';
+ if(next==='preview'&&!job)next='design';
+ if(next==='run'&&!busy&&!hasRun)next='design';
+ stopPreview();screen=next;window.scrollTo(0,0);document.body.classList.toggle('previewing',screen==='preview');
+ for(const id of screens)$('screen-'+id).hidden=id!==screen;
+ if(screen==='preview')$('preview-canvas').append(canvasPanel);else canvasHome.after(canvasPanel);
+ $('wizard-nav').textContent=screens.map((id,i)=>`${i+1}. ${id===screen?'['+id+']':id}`).join('  →  ');
+ $('wizard-back').disabled=screen==='connect'||busy;
+ $('wizard-next').hidden=screen==='preview'||screen==='run';
+ $('connect-next').hidden=screen!=='connect';
+ $('wizard-next').hidden=screen==='connect'||screen==='preview'||screen==='run';
+ $('preview-art').replaceChildren();
+ if(screen==='preview'){review();preparePreview();}
+ updateRun();
+}
+function navigate(next){showScreen(next);history.pushState({screen},'',`#${screen}`);}
+window.addEventListener('popstate',()=>{showScreen(busy?'run':location.hash.slice(1));history.replaceState({screen},'',`#${screen}`);});
+$('wizard-back').onclick=()=>{if(!busy)history.back();};
+$('connect-next').onclick=()=>{if(device.connected)navigate('material');};
+$('wizard-next').onclick=()=>{if(busy)return;if(screen==='design')review();else navigate(screens[screens.indexOf(screen)+1]);};
+$('box-example').onclick=async()=>{try{const response=await fetch('./box.dxf');if(!response.ok)throw Error('Example unavailable');await importText(await response.text(),'Eight-compartment box');}catch(err){toast(err.message);}};
+function stopPreview(){if(animation!==null)cancelAnimationFrame(animation);animation=null;lastFrame=0;$('play-preview').textContent='Play preview';}
+function preparePreview(){stopPreview();segments=job?previewSegments(job):[];segmentIndex=0;segmentProgress=0;$('preview-art').replaceChildren();const travel=segments.filter(s=>s.travel).reduce((n,s)=>n+Math.hypot(s.to[0]-s.from[0],s.to[1]-s.from[1]),0);const count=j=>j.operations.reduce((n,o)=>n+o.pathCount*o.passes,0),total=job?count(job):0,before=job&&job.options.optimise?count(compileJob(drawing,{...options(),optimise:false},preset())):total;$('preview-count').textContent=job?.options.optimise?`${total} operations · ${before} before optimisation`:`${total} operations`;$('preview-stats').textContent=`Each continuous cut or crease pass counts as one operation. ${travel.toFixed(0)} mm travel. Animation speed is illustrative, not an estimated run time.`;$('preview-status').textContent='Ready to preview';}
+function frame(time){
+ let budget=lastFrame?Math.min(time-lastFrame,100)/1000*Number($('preview-speed').value):0;lastFrame=time;
+ while(segmentIndex<segments.length){const s=segments[segmentIndex],length=Math.hypot(s.to[0]-s.from[0],s.to[1]-s.from[1]);const advance=Math.min(budget,length-segmentProgress),start=length?segmentProgress/length:0;segmentProgress+=advance;budget-=advance;const end=length?segmentProgress/length:1;
+ node('line',{x1:s.from[0]+(s.to[0]-s.from[0])*start,y1:s.from[1]+(s.to[1]-s.from[1])*start,x2:s.from[0]+(s.to[0]-s.from[0])*end,y2:s.from[1]+(s.to[1]-s.from[1])*end,stroke:s.travel?'#747b76':s.operation==='cut'?'#a90000':'#001aa9','stroke-width':s.travel?.5:1.5,'stroke-dasharray':s.travel?'2 2':'none'},$('preview-art'));
+ let marker=$('preview-marker');if(!marker){marker=node('circle',{id:'preview-marker',r:2,fill:'#1d352a',stroke:'#fff','stroke-width':.5},$('preview-art'));}marker.setAttribute('cx',s.from[0]+(s.to[0]-s.from[0])*end);marker.setAttribute('cy',s.from[1]+(s.to[1]-s.from[1])*end);$('preview-art').append(marker);
+ $('preview-status').textContent=`${segmentIndex+1}/${segments.length} · ${s.travel?'Travel':s.label}`;
+ if(segmentProgress>=length){segmentIndex++;segmentProgress=0;}if(budget<=0)break;
+ }
+ if(segmentIndex<segments.length)animation=requestAnimationFrame(frame);else{stopPreview();$('preview-status').textContent='Preview complete';}
+}
+$('play-preview').onclick=()=>{if(animation!==null){stopPreview();return;}if(segmentIndex>=segments.length)preparePreview();$('play-preview').textContent='Pause preview';animation=requestAnimationFrame(frame);};
+$('restart-preview').onclick=preparePreview;
+$('optimise').onchange=render;
+history.replaceState({screen:'connect'},'','#connect');showScreen('connect');
+try{const res=await fetch('./config.json');if(!res.ok)throw Error('Material configuration unavailable. Run npm run build.');config=await res.json();for(const [id,items]of [['material',config.materials],['sheet',config.sizes]])for(const item of items){const op=document.createElement('option');op.value=item.id;op.textContent=item.name;$(id).appendChild(op);}$('sheet').value='a3';$('material').value='quill-100gsm-tracing-paper';loadPreset();if(!navigator.bluetooth)$('connection').textContent='Chrome required for Bluetooth';}catch(err){toast(err.message);}

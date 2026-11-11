@@ -1,3 +1,4 @@
+import {optimisePaths} from './order.js';
 import {bounds,positioned,validateSettings} from './geometry.js';
 export const MATS={'12x12':{name:'12 × 12 in',width:304.8,height:304.8,code:1},'12x24':{name:'12 × 24 in',width:304.8,height:609.6,code:2}};
 const su=n=>Math.round(n*20);
@@ -14,8 +15,10 @@ export function compileJob(drawing,options,preset){
  if(!['crease-first','cut-first'].includes(options.order))throw Error('Invalid operation order');
  const groups=options.order==='cut-first'?['cut','crease']:['crease','cut'];
  const steps=[{label:'Set mat',commands:[`TG${mat.code}`,'FN0','TB50,0','FM0','TR0,1','\\0,0',`Z${su(mat.height)},${su(mat.width)}`],wait:true}],operations=[];
+ let cursor=[0,0];const orderedPaths=[];
  for(const op of groups){
-  const group=active.filter(p=>p.operation===op);if(!group.length)continue;
+  let group=active.filter(p=>p.operation===op);if(options.optimise)group=optimisePaths(group,cursor);if(!group.length)continue;
+  orderedPaths.push(...group);cursor=group.at(-1).points.at(-1);
   const s=preset[op],t=s.tool,offset=op==='cut'?18:0,corner=op==='cut'?1:0;
   steps.push({label:`Set ${op} tool`,commands:[`J${t}`,`FX${s.force},${t}`,'TJ1',`!${s.speed},${t}`,'APS0',`FC${offset},1,${t}`,`FE0,${t}`,`FF${corner},${corner},${t}`,'FY1',...(op==='cut'?[`TF${s.depth},1`]:[])],wait:true});
   operations.push({operation:op,tool:t,...s,pathCount:group.length});
@@ -29,5 +32,5 @@ export function compileJob(drawing,options,preset){
  steps.push({label:'Return to origin',commands:['L0','\\0,0','M0,0','TR0,0','J1','FN0','TB50,0'],wait:true});
  const bytes=steps.reduce((sum,s)=>sum+s.commands.join('\x03').length+s.commands.length,0);
  if(bytes>5_000_000)throw Error('Job exceeds 5 MB of commands');
- return {version:1,kind:'generated-dxf-job',mat:options.mat,sheet:{width:sheetWidth,height:sheetHeight},material:preset.name,options:structuredClone(options),operations,paths:active,ignored:drawing.counts.ignored,steps,bytes,bounds:b};
+ return {version:1,kind:'generated-dxf-job',mat:options.mat,sheet:{width:sheetWidth,height:sheetHeight},material:preset.name,options:structuredClone(options),operations,paths:orderedPaths,ignored:drawing.counts.ignored,steps,bytes,bounds:b};
 }

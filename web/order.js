@@ -1,7 +1,7 @@
 const key=p=>p.map(n=>Math.round(n*20)).join(',');
 const distance=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
 const aligned=(a,b,c,d)=>{const u=[b[0]-a[0],b[1]-a[1]],v=[d[0]-c[0],d[1]-c[1]],length=Math.hypot(...u);return length>0&&Math.abs(u[0]*v[1]-u[1]*v[0])<1e-7&&Math.abs(u[0]*(c[1]-b[1])-u[1]*(c[0]-b[0]))/length<.001;};
-export function optimisePaths(paths,{passes=1,join=true,reorder=true,collinear=true,reversePasses=true}={}){
+export function optimisePaths(paths,{passes=1,join=true,reorder=true,collinear=true,reversePasses=true,start=[0,0]}={}){
  const remaining=paths.map(p=>({...p,points:p.points.map(pt=>[...pt])})),chains=[];
  while(remaining.length){
   const chain=remaining.shift();let changed=join;
@@ -17,7 +17,7 @@ export function optimisePaths(paths,{passes=1,join=true,reorder=true,collinear=t
   }}chains.push(chain);
  }
  if(!reorder)return chains;
- const result=[];let cursor=[0,0],previous=null;
+ const result=[];let cursor=[...start],previous=null;
  while(chains.length){let best=null;
   for(let i=0;i<chains.length;i++){
    const pts=chains[i].points,closed=key(pts[0])===key(pts.at(-1));

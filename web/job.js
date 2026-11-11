@@ -28,9 +28,9 @@ export function compileJob(drawing,options,preset){
   {label:'Set working area',commands:area,wait:true}
  ]:[{label:'Set mat',commands:[...initial,...area],wait:true}];
 
- const orderedPaths=[],bridges=[];let bridgeLimited=false;
+ const orderedPaths=[],bridges=[];let bridgeLimited=false,cursor=[0,0];
  for(const op of groups){
-  const continuous=op==='crease'&&flags.continuousCreases,reverse=flags.reversePasses||continuous,ordering={...flags,passes:preset[op].passes,reversePasses:reverse};
+  const continuous=op==='crease'&&flags.continuousCreases,reverse=flags.reversePasses||continuous,ordering={...flags,passes:preset[op].passes,reversePasses:reverse,start:cursor};
   let group=optimisePaths(active.filter(p=>p.operation===op),ordering);
   if(op==='crease'&&flags.creaseBridges&&options.order==='crease-first'){
    const joined=joinCreasesThroughCuts(group,active.filter(p=>p.operation==='cut'));
@@ -52,7 +52,7 @@ export function compileJob(drawing,options,preset){
     for(let n=continuous&&pass>0?1:0;n<points.length;n++){
      const [x,y]=points[n],index=step.commands.length;
      if(op==='crease'&&n&&bridgeEdges.has(bridgeEdgeKey(points[n-1].map(v=>v/20),points[n].map(v=>v/20))))step.bridgeCommands.push(index);
-     step.commands.push(`${n?'D':'M'}${y},${x}`);step.commandPasses.push(pass+1);
+     step.commands.push(`${n?'D':'M'}${y},${x}`);step.commandPasses.push(pass+1);cursor=[x/20,y/20];
     }
     if(!continuous||!combined)steps.push(step);
     if(continuous)combined=step;

@@ -3,6 +3,7 @@ import {PollClock} from './poll-clock.js';
 import {TransmissionPause} from './transmission-pause.js';
 import {jobActivity} from './job-activity.js';
 export const UUID={service:'e2088282-4fde-42f9-bb22-6ec3c7ed8f91',write:'6d92661d-f429-4d67-929b-28e7a9780912',read:'8dcf199a-30e7-4bd4-beb6-beb57dca866c',control:'61490654-b5b4-458c-a867-9e15bc1471e0'};
+export const WRITE_BYTES=94;
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 export class CameoBluetooth{
  constructor(onState=()=>{}){this.transmission=new TransmissionPause();this.onState=onState;this.busy=false;this.connected=false;this.log=[];this.stopped=false;this.pending=null;this.rx=[];}
@@ -38,10 +39,10 @@ export class CameoBluetooth{
  }
  receive(data){this.record('read',data);for(const b of data){if(b===3){const text=new TextDecoder().decode(new Uint8Array(this.rx)).trim();this.rx=[];this.pending?.resolve(text);}else this.rx.push(b);}}
  async send(data){
-  for(let i=0;i<data.length;i+=20){
+  for(let i=0;i<data.length;i+=WRITE_BYTES){
    if(this.stopped)throw Error('Sending stopped. Use the machine’s pause button to stop buffered movement.');
    if(!this.device?.gatt.connected)throw Error('Bluetooth disconnected');
-   const chunk=data.slice(i,i+20);
+   const chunk=data.slice(i,i+WRITE_BYTES);
    let timer;
    try { await Promise.race([this.write.writeValueWithResponse(chunk),new Promise((_,reject)=>{timer=setTimeout(()=>{this.disconnect();reject(Error('Bluetooth write timed out; connection closed.'));},10000);})]); } finally {clearTimeout(timer);}
    this.record('write',chunk);
@@ -69,7 +70,7 @@ export class CameoBluetooth{
   if(this.busy)throw Error('A job is already running');if(!this.connected)throw Error('Connect the Cameo first');
   this.busy=true;this.stopped=false;this.transmission.resume();
   const event=jobActivity(job,this.log,this.simulated?'dry-run':'hardware');let active=-1,outstanding=[],completed=-1,batchId=0;this.pollClock=this.simulated?null:new PollClock(mode=>event('polling-timer',{mode}));
-  try{await this.ready(10000);event('initial-ready');
+  try{event('transport-settings',{writeBytes:this.simulated?null:WRITE_BYTES,acknowledged:true});await this.ready(10000);event('initial-ready');
    for(let i=0;i<job.steps.length;){
     const resumed=await this.transmission.wait(()=>{event('sending-paused',{stepIndex:i});onProgress(i/job.steps.length,'Sending paused.',{phase:'paused',stepIndex:completed,outstanding:[]});});
     if(resumed){event('sending-resumed',{stepIndex:i});await this.ready();}

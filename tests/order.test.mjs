@@ -60,3 +60,24 @@ test('optimised repeated passes reverse direction and preserve original ordering
  assert.equal(passes[0].commands.at(-1).slice(1),passes[1].commands[0].slice(1));
  const original=compileJob(drawing,{...options,optimise:false},preset).steps.filter(s=>s.label.startsWith('Crease '));assert.deepEqual(original[0].commands,original[1].commands);
 });
+test('tool changes order from the final transmitted endpoint for either order and repeat direction',()=>{
+ const preset={name:'Test',cut:{tool:1,force:15,speed:30,depth:4,passes:1},crease:{tool:2,force:33,speed:30,passes:1}};
+ for(const order of ['crease-first','cut-first'])for(const passes of [1,2,3])for(const continuousCreases of [false,true])for(const reversePasses of [false,true]){
+  const first=order==='crease-first'?'crease':'cut',second=first==='cut'?'crease':'cut';
+  const drawing={paths:[path([[0,0],[80,80]],first),path([[1,0],[2,0]],second),path([[82,80],[81,80]],second)],counts:{ignored:0}};
+  const options={mat:'12x12',sheetWidth:300,sheetHeight:300,x:10,y:10,rotation:0,order,optimisations:{reorder:true,reversePasses,continuousCreases}};
+  const settings={...preset,[first]:{...preset[first],passes}},job=compileJob(drawing,options,settings),segments=previewSegments(job);
+  const firstSegments=segments.filter(s=>s.operation===first&&!s.travel),end=firstSegments.at(-1).to;
+  const next=segments.find(s=>s.operation===second&&s.travel);
+  assert.deepEqual(next.from,end);
+  const returns=(reversePasses||(first==='crease'&&continuousCreases))&&passes%2===0;
+  assert.deepEqual(next.to,returns?[11,10]:[91,90]);
+  assert.deepEqual(job.paths[0].points[0],[10,10]);
+  const original=compileJob(drawing,{...options,optimisations:{...options.optimisations,reorder:false}},settings);
+  assert.deepEqual(original.paths.filter(p=>p.operation===second)[0].points[0],[11,10]);
+ }
+});
+test('closed paths use the nearest vertex from an explicit starting position',()=>{
+ const paths=[path([[0,0],[10,0],[10,10],[0,10],[0,0]])];
+ assert.deepEqual(optimisePaths(paths,{start:[11,11]})[0].points[0],[10,10]);
+});

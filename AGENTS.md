@@ -5,6 +5,7 @@
 - Build a static Chrome Web Bluetooth application suitable for GitHub Pages. No backend or capture replay.
 - Cut only pure red (#FF0000); crease only pure blue (#0000FF). Ignore every other colour.
 - Store materials and material sizes in individual YAML files in their respective folders.
+- Commit as you work: make small, coherent commits after relevant checks pass. Do not leave completed work uncommitted.
 - Keep project commands discoverable as small Bash scripts in scripts/.
 - Preserve original captures and keep captures, logs, device identifiers and local analysis out of Git.
 - Do not initiate unattended machine movement or interrupt Silhouette Studio during a cut.

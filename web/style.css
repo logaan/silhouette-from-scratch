@@ -3,3 +3,5 @@
 .canvas-toolbar .text-button{padding:0;font-size:10px}
 
 .risk-notice{border:1px solid #d4b880;background:#fff9e9;padding:15px;border-radius:8px;margin:16px 0}.risk-notice strong{font-size:13px}.risk-notice p{font-size:12px;color:#705c3a}#risk-form input{display:block;width:100%;margin:8px 0;padding:10px;border:1px solid #c9bb9e;border-radius:5px}#risk-error{color:#a02e25}.risk-notice [hidden]{display:none}
+
+.browser-notice{margin:24px;padding:24px;border:2px solid #a35038;border-radius:12px;background:#fff0e8;color:#793f32;font-size:16px}.browser-notice strong{font-size:24px}.browser-notice p{margin-bottom:0}body.browser-blocked main,body.browser-blocked header{opacity:.55}

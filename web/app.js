@@ -46,16 +46,15 @@ function review(){if(!job)return;reviewed=structuredClone(job);const content=$('
  for(const op of job.operations){const row=document.createElement('tr');for(const value of [op.operation,op.tool,op.force,op.speed,op.depth??'—',op.passes]){const td=document.createElement('td');td.textContent=value;row.appendChild(td);}table.appendChild(row);}content.appendChild(table);
  const note=document.createElement('p');note.textContent=`${job.ignored} ignored entities excluded. ${job.bytes.toLocaleString()} bytes prepared. Placement: ${job.options.x}, ${job.options.y} mm.`;content.appendChild(note);
  $('ready-check').checked=false;updateRun();$('review-dialog').showModal();}
-let riskRecord=null,riskStorageAvailable=true;
+let riskRecord=null;
 function readRisk(){
- try{const raw=localStorage.getItem(RISK_KEY);riskRecord=raw?JSON.parse(raw):null;}catch{riskStorageAvailable=false;}
+ try{const raw=localStorage.getItem(RISK_KEY);riskRecord=raw?JSON.parse(raw):null;}catch{}
  return riskRecord;
 }
-function saveRisk(record){riskRecord=record;try{localStorage.setItem(RISK_KEY,JSON.stringify(record));}catch{riskStorageAvailable=false;}}
+function saveRisk(record){riskRecord=record;try{localStorage.setItem(RISK_KEY,JSON.stringify(record));}catch{}}
 function refreshRisk(){
  const state=acknowledgementState(readRisk());
  $('risk-form').hidden=!state.needsPhrase;$('risk-checkbox-label').hidden=state.needsPhrase;$('risk-check').checked=state.accepted;
- $('risk-help').textContent=riskStorageAvailable?'Confirm once each day. Retype the phrase every three months. Saved in this browser only.':'Browser storage is unavailable. This acknowledgement lasts only for this open page.';
  return state;
 }
 $('risk-form').addEventListener('submit',e=>{e.preventDefault();try{saveRisk(acknowledge(readRisk(),{phrase:$('risk-phrase').value}));$('risk-phrase').value='';$('risk-error').textContent='';updateRun();}catch(err){$('risk-error').textContent=err.message;}});

@@ -7,7 +7,7 @@ import {compileJob,MATS} from './job.js';
 import {CameoBluetooth} from './bluetooth.js';
 const $=id=>document.getElementById(id),NS='http://www.w3.org/2000/svg';
 let view=null,viewMat=null;
-let config,drawing=null,job=null,reviewed=null,rawText='',busy=false,hasRun=false;
+let config,drawing=null,job=null,reviewed=null,rawText='',busy=false,hasRun=false,liveRun=null;
 const dryRun=isDryRun();
 const device=new (dryRun?DryRunCameo:CameoBluetooth)(state=>{$('connection').textContent=state;$('connect').textContent=device.connected?'Disconnect':'Connect Cameo ↗';updateRun();});
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;setTimeout(()=>$('toast').hidden=true,10000);}
@@ -17,7 +17,7 @@ function preset(){const p=structuredClone(config.materials.find(p=>p.id===$('mat
 function loadPreset(){const p=config.materials.find(p=>p.id===$('material').value);$('mat').value=p.mat;$('sheet').value=p.size;$('landscape').checked=false;for(const op of ['cut','crease'])for(const key of ['force','speed','passes',...(op==='cut'?['depth']:[])])$(`${op}-${key}`).value=p[op][key];render();}
 function render(){
  if(!config)return;reviewed=null;job=null;
- const o=options(),mat=MATS[o.mat],art=$('mat-art'),draw=$('drawing-art');art.replaceChildren();draw.replaceChildren();
+ const o=screen==='run'&&liveRun?liveRun.job.options:options(),mat=MATS[o.mat],art=$('mat-art'),draw=$('drawing-art');art.replaceChildren();draw.replaceChildren();
  if(viewMat!==o.mat){viewMat=o.mat;view={x:-18,y:-18,width:mat.width+36,height:mat.height+36};}
  applyView();$('mat-label').textContent=mat.name;
  node('rect',{x:-10,y:-10,width:mat.width+20,height:mat.height+20,rx:5,fill:'#e0e8da'},art);
@@ -38,7 +38,7 @@ function render(){
   job=compileJob(drawing,o,preset());valid=true;
   $('validation').textContent=`Fits your material. ${job.operations.map(op=>`${op.pathCount} ${op.operation} paths × ${op.passes} pass${op.passes>1?'es':''}`).join(' · ')}.`;
  }catch(err){$('validation').textContent=err.message;}
- $('validation').classList.toggle('invalid',!!drawing&&!valid);$('review').disabled=!valid||busy;$('download').disabled=!valid||busy;updateRun();if(screen==='preview'&&job)review();
+ $('validation').classList.toggle('invalid',!!drawing&&!valid);$('review').disabled=!valid||busy;$('download').disabled=!valid||busy;updateRun();if(screen==='preview'&&job)review();if(screen==='run')paintRun();
 }
 async function importText(text,name){try{const parsed=parseDXF(text,$('units').value==='auto'?null:$('units').value);rawText=text;drawing=parsed;$('filename').textContent=name;centreDrawing();}catch(err){drawing=null;rawText=text;$('filename').textContent=name;render();toast(err.message);}}
 async function importFile(file){if(screen!=='design'||busy)return;if(!file)return;if(file.size>10_000_000)return toast('File exceeds 10 MB');await importText(await file.text(),file.name);}
@@ -68,8 +68,8 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)updateRun(
 setInterval(()=>{if(screen==='preview')updateRun();},30000);
 function updateRun(){const risk=refreshRisk();$('connect-next').disabled=!device.connected;$('wizard-next').disabled=busy||(screen==='connect'&&!device.connected)||(screen==='design'&&!job);$('run').disabled=!risk.accepted||!reviewed||!device.connected||!$('ready-check').checked||busy;$('run-note').textContent=device.connected?(dryRun?'Dry run only. No commands will be sent to hardware.':'Run sends this reviewed job to the Cameo.'):'Connect the Cameo using Chrome to continue.';}
 function setBusy(value){busy=value;for(const el of document.querySelectorAll('main input,main select,main button,#connect'))el.disabled=value;$('stop').disabled=!value;if(!value){render();$('connect').disabled=false;showScreen('run');}updateRun();}
-async function run(){if(!reviewed||busy||!device.connected||!$('ready-check').checked)return;if(!refreshRisk().accepted){updateRun();return;}const snapshot=reviewed;$('progress').value=0;$('run-title').textContent=dryRun?'Simulating your job.':'Your job is in motion.';$('run-description').textContent=dryRun?'The simulated Cameo accepts every command without moving hardware.':'Keep the machine attended while it works.';hasRun=true;navigate('run');setBusy(true);
- try{await device.run(snapshot,(p,label)=>{$('progress').value=p;$('progress-label').textContent=label;});$('run-title').textContent=dryRun?'Dry run complete.':'Your job is complete.';$('run-description').textContent=dryRun?'The full job was accepted by the simulated Cameo. No hardware commands were sent.':'The Cameo reports ready. Your activity log is available below.';}
+async function run(){if(!reviewed||busy||!device.connected||!$('ready-check').checked)return;if(!refreshRisk().accepted){updateRun();return;}const snapshot=reviewed;snapshot.build={commit:document.querySelector('.build-footer a').title,url:document.querySelector('.build-footer a').href};liveRun={job:snapshot,segments:previewSegments(snapshot),completed:-1,active:-1,phase:'starting'};$('progress').value=0;$('run-title').textContent=dryRun?'Simulating your job.':'Your job is in motion.';$('run-description').textContent=dryRun?'The simulated Cameo accepts every command without moving hardware.':'Keep the machine attended while it works.';hasRun=true;navigate('run');setBusy(true);
+ try{await device.run(snapshot,(p,label,detail={})=>{$('progress').value=p;$('progress-label').textContent=label;liveRun.phase=detail.phase;liveRun.active=detail.stepIndex??-1;if(detail.phase==='completed')liveRun.completed=detail.stepIndex;paintRun();});$('run-title').textContent=dryRun?'Dry run complete.':'Your job is complete.';$('run-description').textContent=dryRun?'The full job was accepted by the simulated Cameo. No hardware commands were sent.':'The Cameo reports ready. Your activity log is available below.';}
  catch(err){$('run-title').textContent='Job stopped.';$('progress-label').textContent=err.message;toast(err.message);}finally{setBusy(false);}}
 $('file').addEventListener('change',e=>importFile(e.target.files[0]));
 $('drop').addEventListener('dragover',e=>e.preventDefault());$('drop').addEventListener('drop',e=>{e.preventDefault();importFile(e.dataTransfer.files[0]);});
@@ -81,7 +81,7 @@ function centreDrawing(){if(!drawing)return;const o=options(),b=bounds(positione
 $('center').onclick=centreDrawing;
 $('review').onclick=review;$('ready-check').onchange=updateRun;$('run').onclick=run;
 $('download').onclick=()=>{if(job)download('silhouette-job-report.json',JSON.stringify(job,null,2));};
-$('save-log').onclick=()=>download('silhouette-activity.json',JSON.stringify({identity:device.identity||null,events:device.log},null,2));
+$('save-log').onclick=()=>download('silhouette-activity.json',JSON.stringify({version:2,build:{commit:document.querySelector('.build-footer a').title,url:document.querySelector('.build-footer a').href},mode:dryRun?'dry-run':'hardware',identity:device.identity||null,events:device.log},null,2));
 $('connect').onclick=async()=>{if(device.connected){device.disconnect();return;}try{$('connect').disabled=true;$('connection').textContent='Choosing device…';await device.connect();navigate('material');}catch(err){toast(err.message);$('connection').textContent='Not connected';}finally{$('connect').disabled=false;updateRun();}};
 $('stop').onclick=()=>{device.stop();$('progress-label').textContent='Sending stopped. Press the machine’s pause button to halt buffered movement.';};
 let drag=null;
@@ -108,16 +108,16 @@ function showScreen(next){
  if(!device.connected&&next!=='connect'&&!busy)next='connect';
  if(next==='preview'&&!job)next='design';
  if(next==='run'&&!busy&&!hasRun)next='design';
- stopPreview();screen=next;window.scrollTo(0,0);document.body.classList.toggle('previewing',screen==='preview');
+ stopPreview();screen=next;window.scrollTo(0,0);document.body.classList.toggle('previewing',screen==='preview');document.body.classList.toggle('running-view',screen==='run');
  for(const id of screens)$('screen-'+id).hidden=id!==screen;
- if(screen==='preview')$('preview-canvas').append(canvasPanel);else $('design-canvas').append(canvasPanel);
+ if(screen==='preview')$('preview-canvas').append(canvasPanel);else if(screen==='run')$('run-canvas').append(canvasPanel);else $('design-canvas').append(canvasPanel);
  $('wizard-nav').replaceChildren(...screens.map((id,i)=>{const item=document.createElement('span');item.className='wizard-step'+(id===screen?' current':i<screens.indexOf(screen)?' completed':'');if(id===screen)item.setAttribute('aria-current','step');const number=document.createElement('span');number.className='step-number';number.textContent=String(i+1).padStart(2,'0');item.append(number,document.createTextNode(id[0].toUpperCase()+id.slice(1)));return item;}));
  $('wizard-back').disabled=screen==='connect'||busy;
  $('wizard-next').hidden=screen==='preview'||screen==='run';
  $('connect-next').hidden=screen!=='connect';
  $('wizard-next').hidden=screen!=='material';$('wizard-next').textContent='Arrange design →';
  $('preview-art').replaceChildren();
- if(screen==='preview'){review();preparePreview();}
+ if(screen==='preview'){review();preparePreview();}if(screen==='run'&&config)render();
  updateRun();
 }
 function navigate(next){showScreen(next);history.pushState({screen},'',`#${screen}`);}
@@ -126,6 +126,19 @@ $('wizard-back').onclick=()=>{if(!busy)history.back();};
 $('connect-next').onclick=()=>{if(device.connected)navigate('material');};
 $('wizard-next').onclick=()=>{if(busy)return;if(screen==='design')review();else navigate(screens[screens.indexOf(screen)+1]);};
 $('box-example').onclick=async()=>{try{const response=await fetch('./box.dxf');if(!response.ok)throw Error('Example unavailable');await importText(await response.text(),'Eight-compartment box');}catch(err){toast(err.message);}};
+function paintRun(){
+ const art=$('run-art');art.replaceChildren();if(!liveRun)return;
+ const base=$('drawing-art');base.replaceChildren();
+ for(const p of liveRun.job.paths)node('polyline',{points:p.points.map(pt=>pt.join(',')).join(' '),fill:'none',stroke:p.operation==='cut'?'#ed3c34':'#294ff0','stroke-width':1.2,'vector-effect':'non-scaling-stroke'},base);
+ for(const s of liveRun.segments){
+  const done=s.stepIndex<=liveRun.completed,active=s.stepIndex===liveRun.active&&!done;
+  if(!done&&!active)continue;
+  const uncertain=active&&liveRun.phase==='failed';
+  node('line',{x1:s.from[0],y1:s.from[1],x2:s.to[0],y2:s.to[1],stroke:uncertain?'#b47c22':s.travel?'#82907d':s.operation==='cut'?'#d64036':'#304cdd','stroke-width':s.travel?.6:1.5,'stroke-dasharray':s.travel?'2 2':active?'3 1':'none',class:active&&!uncertain?'live-path':'','vector-effect':'non-scaling-stroke'},art);
+ }
+ const total=liveRun.job.operations.reduce((n,o)=>n+o.pathCount*o.passes,0),completed=liveRun.job.steps.slice(0,liveRun.completed+1).filter(s=>/^(Cut|Crease) /.test(s.label)).length;
+ $('live-note').textContent=`${completed} of ${total} operations confirmed complete. `+(liveRun.phase==='failed'?'The amber path was not confirmed complete.':liveRun.phase==='complete'?'All operations completed.':'The animated path is active; exact tool position is not reported.');
+}
 function stopPreview(){if(animation!==null)cancelAnimationFrame(animation);animation=null;lastFrame=0;$('play-preview').textContent='Play preview';}
 function preparePreview(){stopPreview();segments=job?previewSegments(job):[];segmentIndex=0;segmentProgress=0;$('preview-art').replaceChildren();const travel=segments.filter(s=>s.travel).reduce((n,s)=>n+Math.hypot(s.to[0]-s.from[0],s.to[1]-s.from[1]),0);const count=j=>j.operations.reduce((n,o)=>n+o.pathCount*o.passes,0),total=job?count(job):0,before=job&&job.options.optimise?count(compileJob(drawing,{...options(),optimise:false},preset())):total;$('preview-count').textContent=job?.options.optimise?`${total} operations · ${before} before optimisation`:`${total} operations`;$('preview-stats').textContent=`Each continuous cut or crease pass counts as one operation. ${travel.toFixed(0)} mm travel. Animation speed is illustrative, not an estimated run time.`;$('preview-status').textContent='Ready to preview';}
 function frame(time){

@@ -32,6 +32,6 @@ export function optimisePaths(paths){
 }
 export function previewSegments(job){
  let cursor=[0,0];const segments=[];
- for(const step of job.steps)for(const command of step.commands){const match=/^([MD])(-?\d+),(-?\d+)$/.exec(command);if(!match)continue;const end=[Number(match[3])/20,Number(match[2])/20];segments.push({from:cursor,to:end,travel:match[1]==='M',operation:step.label.startsWith('Crease')?'crease':'cut',label:step.label});cursor=end;}
+ for(const [stepIndex,step] of job.steps.entries())for(const command of step.commands){const match=/^([MD])(-?\d+),(-?\d+)$/.exec(command);if(!match)continue;const end=[Number(match[3])/20,Number(match[2])/20];segments.push({stepIndex,from:cursor,to:end,travel:match[1]==='M',operation:step.label.startsWith('Crease')?'crease':'cut',label:step.label});cursor=end;}
  return segments;
 }

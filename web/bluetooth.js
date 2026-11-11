@@ -1,3 +1,4 @@
+import {jobActivity} from './job-activity.js';
 export const UUID={service:'e2088282-4fde-42f9-bb22-6ec3c7ed8f91',write:'6d92661d-f429-4d67-929b-28e7a9780912',read:'8dcf199a-30e7-4bd4-beb6-beb57dca866c',control:'61490654-b5b4-458c-a867-9e15bc1471e0'};
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 export class CameoBluetooth{
@@ -64,10 +65,18 @@ export class CameoBluetooth{
  async run(job,onProgress=()=>{}){
   if(this.busy)throw Error('A job is already running');if(!this.connected)throw Error('Connect the Cameo first');
   this.busy=true;this.stopped=false;
-  try{await this.ready(10000);
-   for(let i=0;i<job.steps.length;i++){const step=job.steps[i];onProgress(i/job.steps.length,step.label);await this.send(new TextEncoder().encode(step.commands.join('\x03')+'\x03'));if(step.wait)await this.ready();}
-   onProgress(1,'Complete — device reports ready');
-  }finally{this.busy=false;}
+  const event=jobActivity(job,this.log);let active=-1;
+  try{await this.ready(10000);event('initial-ready');
+   for(let i=0;i<job.steps.length;i++){
+    active=i;const step=job.steps[i],started=performance.now();
+    event('step-start',{stepIndex:i,label:step.label,commandCount:step.commands.length});onProgress(i/job.steps.length,step.label,{phase:'sending',stepIndex:i});
+    await this.send(new TextEncoder().encode(step.commands.join('\x03')+'\x03'));
+    event('step-sent',{stepIndex:i,send_ms:performance.now()-started});onProgress(i/job.steps.length,step.label,{phase:'waiting',stepIndex:i});
+    const waiting=performance.now();if(step.wait)await this.ready();
+    event('step-complete',{stepIndex:i,wait_ms:performance.now()-waiting,duration_ms:performance.now()-started});onProgress((i+1)/job.steps.length,step.label,{phase:'completed',stepIndex:i});
+   }
+   event('job-complete');onProgress(1,'Complete — device reports ready',{phase:'complete'});
+  }catch(error){event('job-failed',{stepIndex:active,message:error.message});onProgress(Math.max(0,active)/job.steps.length,error.message,{phase:'failed',stepIndex:active});throw error;}finally{this.busy=false;}
  }
  stop(){this.stopped=true;this.pending?.reject(Error('Sending stopped'));}
  disconnect(){this.stop();this.device?.gatt?.disconnect();this.connected=false;}

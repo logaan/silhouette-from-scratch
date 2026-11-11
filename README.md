@@ -35,6 +35,8 @@ Open [localhost:4173](http://127.0.0.1:4173) in Chrome. Bluetooth requires HTTPS
 
 Use the wizard’s Back button or browser Back/Forward to revisit screens. Rotation and centring are available; drawings retain their imported size. Scroll to pan the mat and pinch to zoom.
 
+Machine Activity animates the active path and marks operations complete when the Cameo reports ready. It does not estimate exact tool position. Activity logs include the build, job settings, and per-operation send and wait timings.
+
 **Stop sending** prevents further transmission but does not stop movement already buffered in the machine. Use the Cameo’s physical pause button to stop that movement.
 
 ## Presets

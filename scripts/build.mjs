@@ -14,6 +14,7 @@ let commit=process.env.GITHUB_SHA;
 if(!commit){try{commit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();}catch{commit='unknown';}}
 if(!/^[a-f0-9]{40}$/i.test(commit))commit='unknown';
 await fs.copyFile('web/style.css','dist/style.css');
+await fs.copyFile('web/poll-worker.js','dist/poll-worker.js');
 const runId=process.env.GITHUB_RUN_ID;
 const buildUrl=runId&&/^\d+$/.test(runId)?`https://github.com/logaan/silhouette-from-scratch/actions/runs/${runId}`:`https://github.com/logaan/silhouette-from-scratch/commit/${commit}`;
 const html=await fs.readFile('web/index.html','utf8');

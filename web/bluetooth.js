@@ -1,3 +1,5 @@
+import {operationBatch} from './operation-batch.js';
+import {PollClock} from './poll-clock.js';
 import {TransmissionPause} from './transmission-pause.js';
 import {jobActivity} from './job-activity.js';
 export const UUID={service:'e2088282-4fde-42f9-bb22-6ec3c7ed8f91',write:'6d92661d-f429-4d67-929b-28e7a9780912',read:'8dcf199a-30e7-4bd4-beb6-beb57dca866c',control:'61490654-b5b4-458c-a867-9e15bc1471e0'};
@@ -60,27 +62,38 @@ export class CameoBluetooth{
    if(status==='2')throw Error('Load the mat in the Cameo before running this job');
    if(!['0','1'].includes(status))throw Error(`Unexpected cutter status: ${status}`);
    readyCount=status==='0'?readyCount+1:0;if(readyCount>=2)return;
-   await delay(350);
+   await (this.pollClock?.wait(350)??delay(350));
   }throw Error('Cameo did not become ready in time. Check the machine; the job will not resume automatically.');
  }
  async run(job,onProgress=()=>{}){
   if(this.busy)throw Error('A job is already running');if(!this.connected)throw Error('Connect the Cameo first');
   this.busy=true;this.stopped=false;this.transmission.resume();
-  const event=jobActivity(job,this.log);let active=-1;
+  const event=jobActivity(job,this.log,this.simulated?'dry-run':'hardware');let active=-1,outstanding=[],completed=-1,batchId=0;this.pollClock=this.simulated?null:new PollClock(mode=>event('polling-timer',{mode}));
   try{await this.ready(10000);event('initial-ready');
-   for(let i=0;i<job.steps.length;i++){
-    const resumed=await this.transmission.wait(()=>{event('sending-paused',{stepIndex:i});onProgress(i/job.steps.length,'Sending paused.',{phase:'paused',stepIndex:i-1});});
-    if(resumed){event('sending-resumed',{stepIndex:i});await this.ready();}
+   for(let i=0;i<job.steps.length;){
+    await this.beforeBatch?.();
+    const resumed=await this.transmission.wait(()=>{event('sending-paused',{stepIndex:i});onProgress(i/job.steps.length,'Sending paused.',{phase:'paused',stepIndex:completed,outstanding:[]});});
+    if(resumed){event('sending-resumed',{stepIndex:i});await this.beforeBatch?.();await this.ready();}
     if(this.stopped||!this.connected)throw Error('Connection closed. Start a new job.');
-    active=i;const step=job.steps[i],started=performance.now();
-    event('step-start',{stepIndex:i,label:step.label,commandCount:step.commands.length});onProgress(i/job.steps.length,step.label,{phase:'sending',stepIndex:i});
-    await this.send(new TextEncoder().encode(step.commands.join('\x03')+'\x03'));
-    event('step-sent',{stepIndex:i,send_ms:performance.now()-started});onProgress(i/job.steps.length,step.label,{phase:'waiting',stepIndex:i});
-    const waiting=performance.now();if(step.wait)await this.ready();
-    event('step-complete',{stepIndex:i,wait_ms:performance.now()-waiting,duration_ms:performance.now()-started});onProgress((i+1)/job.steps.length,step.label,{phase:'completed',stepIndex:i});
+    const batch=operationBatch(job,i,this.batchLimit,this.batchBytes),batchStart=performance.now(),sentAt=new Map();batchId++;outstanding=[];
+    event('batch-start',{batchId,indices:batch.indices,bytes:batch.bytes,operation:batch.operation,limit:this.batchLimit||1,byteLimit:this.batchBytes||4096});
+    for(const index of batch.indices){
+     if(this.transmission.requested&&outstanding.length)break;
+     active=index;const step=job.steps[index],started=performance.now();outstanding.push(index);sentAt.set(index,started);
+     event('step-start',{stepIndex:index,batchId,label:step.label,commandCount:step.commands.length});onProgress((completed+1)/job.steps.length,step.label,{phase:'sending',stepIndex:index,outstanding:[...outstanding]});
+     await this.send(new TextEncoder().encode(step.commands.join('\x03')+'\x03'));
+     event('step-sent',{stepIndex:index,batchId,send_ms:performance.now()-started,outstanding:[...outstanding]});
+    }
+    const waiting=performance.now(),readyTimeoutMs=Math.min(1_200_000,120_000*outstanding.length);event('batch-sent',{batchId,indices:[...outstanding],send_ms:waiting-batchStart,readyTimeoutMs});
+    onProgress((completed+1)/job.steps.length,outstanding.length>1?`Waiting for ${outstanding.length} queued operations`:job.steps[active].label,{phase:'waiting',stepIndex:active,outstanding:[...outstanding]});
+    if(outstanding.some(index=>job.steps[index].wait))await this.ready(readyTimeoutMs);
+    const finished=performance.now();event('batch-complete',{batchId,indices:[...outstanding],wait_ms:finished-waiting,duration_ms:finished-batchStart,completion:'ready-after-batch'});
+    const confirmed=[...outstanding];outstanding=[];
+    for(const index of confirmed){completed=index;event('step-complete',{stepIndex:index,batchId,wait_ms:finished-waiting,duration_ms:finished-sentAt.get(index),completion:confirmed.length>1?'batch-ready':'ready'});onProgress((index+1)/job.steps.length,job.steps[index].label,{phase:'completed',stepIndex:index,outstanding:[]});}
+    i=active+1;
    }
-   event('job-complete');onProgress(1,'Complete — device reports ready',{phase:'complete'});
-  }catch(error){event('job-failed',{stepIndex:active,message:error.message});onProgress(Math.max(0,active)/job.steps.length,error.message,{phase:'failed',stepIndex:active});throw error;}finally{this.busy=false;this.transmission.resume();}
+   event('job-complete');onProgress(1,this.simulated?'Dry run complete — no commands sent to hardware':'Complete — device reports ready',{phase:'complete'});
+  }catch(error){event('job-failed',{stepIndex:active,message:error.message,outstanding});onProgress((completed+1)/job.steps.length,error.message,{phase:'failed',stepIndex:active,outstanding});throw error;}finally{this.pollClock?.close();this.pollClock=null;this.busy=false;this.transmission.resume();}
  }
  pause(){if(this.busy)this.transmission.pause();}
  resume(){this.transmission.resume();}

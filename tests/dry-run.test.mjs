@@ -12,5 +12,5 @@ test('dry run connects and accepts the full job without hardware',async()=>{
 test('dry run stops without accepting later commands',async()=>{
  const device=new DryRunCameo();await device.connect();
  await assert.rejects(device.run({steps:Array.from({length:30},()=>({label:'Path',commands:['M1,1']}))},()=>device.stop()),/stopped/);
- assert.equal(device.log.filter(e=>e.direction==='simulation').length,1);assert.equal(device.busy,false);
+ assert.equal(device.log.filter(e=>e.direction==='simulation').length,0);assert.equal(device.busy,false);
 });

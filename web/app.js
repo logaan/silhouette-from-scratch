@@ -1,3 +1,4 @@
+import {bufferNotice} from './buffer-status.js';
 import {DryRunCameo,isDryRun} from './dry-run.js';
 import {previewSegments} from './order.js';
 import {RISK_KEY,acknowledgementState,acknowledge} from './acknowledgement.js';
@@ -19,7 +20,7 @@ function loadPreset(){const p=config.materials.find(p=>p.id===$('material').valu
 function render(){
  if(!config)return;reviewed=null;job=null;
  const o=screen==='run'&&liveRun?liveRun.job.options:options(),mat=MATS[o.mat],art=$('mat-art'),draw=$('drawing-art');art.replaceChildren();draw.replaceChildren();
- if(viewMat!==o.mat){viewMat=o.mat;view={x:-18,y:-18,width:mat.width+36,height:mat.height+36};}
+ if(viewMat!==o.mat){viewMat=o.mat;view={x:-18,y:-18,width:mat.width+36,height:mat.height+36};$('canvas').style.aspectRatio=`${mat.width+36} / ${mat.height+36}`;}
  applyView();$('mat-label').textContent=mat.name;
  node('rect',{x:-10,y:-10,width:mat.width+20,height:mat.height+20,rx:5,fill:'#e0e8da'},art);
  node('rect',{width:mat.width,height:mat.height,fill:'#f1f5ed',stroke:'#b0c4a6','stroke-width':.5},art);
@@ -130,6 +131,7 @@ $('wizard-next').onclick=()=>{if(busy)return;if(screen==='design')review();else 
 $('box-example').onclick=async()=>{try{const response=await fetch('./box.dxf');if(!response.ok)throw Error('Example unavailable');await importText(await response.text(),'Eight-compartment box');}catch(err){toast(err.message);}};
 function paintRun(){
  const art=$('run-art');art.replaceChildren();if(!liveRun)return;
+ $('buffer-status').textContent=bufferNotice(liveRun,dryRun);
  const base=$('drawing-art');base.replaceChildren();
  for(const p of liveRun.job.paths)node('polyline',{points:p.points.map(pt=>pt.join(',')).join(' '),fill:'none',stroke:p.operation==='cut'?'#ed3c34':'#294ff0','stroke-width':1.2,'vector-effect':'non-scaling-stroke'},base);
  for(const s of liveRun.segments){

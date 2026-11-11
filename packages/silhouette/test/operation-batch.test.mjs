@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {operationBatch} from '../web/operation-batch.js';
-import {CameoBluetooth} from '../web/bluetooth.js';
+import {operationBatch} from '../src/operation-batch.js';
+import {CameoBluetooth} from '@cut-and-crease/silhouette';
 const step=(label,n)=>({label,commands:[`M${n},0`,`D${n},10`],wait:true});
 test('batches stay within operation, byte and setup boundaries',()=>{
  const job={steps:[step('Set crease tool',0),...Array.from({length:10},(_,i)=>step(`Crease ${i}`,i)),step('Set cut tool',0),step('Cut 1',10)]};

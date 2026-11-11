@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {DryRunCameo} from '../web/dry-run.js';
+import {DryRunCameo} from '@cut-and-crease/silhouette';
 test('dry run connects and accepts the full job without hardware',async()=>{
  const states=[],progress=[],device=new DryRunCameo(s=>states.push(s));
  await device.connect();assert(device.connected);

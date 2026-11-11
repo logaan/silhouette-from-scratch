@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import {parseDXF,compileJob,exportDXF,OPTIMISATIONS,operationCount} from '@cut-and-crease/dxf';
+import {DryRunCameo,CameoBluetooth,WRITE_BYTES} from '@cut-and-crease/silhouette';
+const drawing=parseDXF(await fs.readFile(process.argv[2],'utf8'));
+const settings={name:'Test',cut:{tool:1,force:15,speed:30,depth:4,passes:1},crease:{tool:2,force:33,speed:30,passes:2}};
+const job=compileJob(drawing,{mat:'12x12',sheetWidth:300,sheetHeight:300,x:0,y:0,rotation:0,order:'crease-first',optimisations:Object.fromEntries(OPTIMISATIONS.map(key=>[key,true]))},settings);
+assert.equal(operationCount(job),50);
+assert.equal(parseDXF(exportDXF(job)).paths.length,50);
+assert.equal(typeof CameoBluetooth,'function');
+assert.equal(WRITE_BYTES,94);
+assert((await fs.readFile(new URL(import.meta.resolve('@cut-and-crease/silhouette/poll-worker.js')),'utf8')).includes('postMessage'));
+const device=new DryRunCameo();
+await device.connect();device.batchLimit='tool';await device.run(job);
+assert.equal(device.log.at(-1).type,'job-complete');
+device.disconnect();
+console.log('Standalone library packages passed without the web app or workspace links.');

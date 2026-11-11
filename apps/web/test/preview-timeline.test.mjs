@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {PreviewTimeline} from '../web/preview-timeline.js';
+import {PreviewTimeline} from '../preview-timeline.js';
 const segments=[{from:[0,0],to:[3,0],stepIndex:1},{from:[3,0],to:[3,4],stepIndex:1},{from:[3,4],to:[6,4],stepIndex:2},{from:[6,4],to:[6,0],stepIndex:2}];
 test('preview steps whole operations in either direction and clamps at either end',()=>{
  const t=new PreviewTimeline(segments);t.step(-1);assert.equal(t.position,0);t.step(1);assert.equal(t.position,7);t.step(1);assert.equal(t.position,14);t.step(1);assert.equal(t.position,14);t.step(-1);assert.equal(t.position,7);t.seek(9);t.step(-1);assert.equal(t.position,7);t.step(-1);assert.equal(t.position,0);

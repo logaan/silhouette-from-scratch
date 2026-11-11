@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {compileJob} from '../web/job.js';
-import {operationBatch} from '../web/operation-batch.js';
+import {compileJob} from '@cut-and-crease/dxf';
+import {operationBatch} from '../packages/silhouette/src/operation-batch.js';
 const drawing={paths:[{operation:'cut',points:[[0,0],[10,0]]}],counts:{ignored:0}},preset={name:'Test',cut:{tool:1,force:15,speed:30,depth:4,passes:1},crease:{tool:2,force:33,speed:30,passes:2}};
 test('tracking matches the captured feed sequence and stays separate from tool motion',()=>{
  for(const mat of ['12x12','12x24']){

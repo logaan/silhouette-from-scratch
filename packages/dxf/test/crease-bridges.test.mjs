@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {joinCreasesThroughCuts} from '../web/crease-bridges.js';
-import {parseDXF} from '../web/geometry.js';
-import {compileJob} from '../web/job.js';
-import {previewSegments} from '../web/order.js';
+import {joinCreasesThroughCuts} from '@cut-and-crease/dxf';
+import {parseDXF} from '@cut-and-crease/dxf';
+import {compileJob} from '@cut-and-crease/dxf';
+import {previewSegments} from '@cut-and-crease/dxf';
 const path=(points,operation='crease')=>({points,operation});
 const edge=(a,b)=>[a,b].map(p=>p.map(n=>Math.round(n*20)).join(',')).sort().join('|');
 test('joins crease ends through a red corner, reversing paths as necessary',()=>{
@@ -24,7 +24,7 @@ test('never invents gap crossings, long detours, or extra passes over blue geome
  assert(joinCreasesThroughCuts(overlap,[path([[0,5],[10,5]],'cut')]).bridges.every(b=>b.points.every(p=>p[0]<=3||p[0]>=7)));
 });
 test('box bridges preserve all required passes and cut geometry and use only red edges',()=>{
- const d=parseDXF(fs.readFileSync('test-files/foldover-8-compartment-box.dxf','utf8')),p={name:'Test',cut:{tool:1,force:15,speed:30,depth:4,passes:1},crease:{tool:2,force:33,speed:30,passes:2}},o={mat:'12x12',sheetWidth:300,sheetHeight:300,x:0,y:0,rotation:0,order:'crease-first',optimise:true};
+ const d=parseDXF(fs.readFileSync(new URL('../../../test-files/foldover-8-compartment-box.dxf',import.meta.url),'utf8')),p={name:'Test',cut:{tool:1,force:15,speed:30,depth:4,passes:1},crease:{tool:2,force:33,speed:30,passes:2}},o={mat:'12x12',sheetWidth:300,sheetHeight:300,x:0,y:0,rotation:0,order:'crease-first',optimise:true};
  const original=compileJob(d,o,p),joined=compileJob(d,{...o,creaseBridges:true},p),before=previewSegments(original),after=previewSegments(joined);
  const drawn=s=>s.filter(p=>!p.travel&&!p.bridge).map(p=>p.operation+':'+edge(p.from,p.to)).sort();
  assert.deepEqual(drawn(after),drawn(before));assert.equal(joined.operations.find(o=>o.operation==='cut').pathCount,24);assert.equal(joined.operations.find(o=>o.operation==='crease').pathCount,26);assert.equal(joined.bridges.length,36);

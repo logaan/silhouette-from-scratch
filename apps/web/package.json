@@ -1,0 +1,15 @@
+{
+  "name": "@cut-and-crease/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "build": "cd ../.. && node scripts/build.mjs",
+    "dev": "cd ../.. && node scripts/serve.mjs"
+  },
+  "dependencies": {
+    "@cut-and-crease/dxf": "0.1.0",
+    "@cut-and-crease/silhouette": "0.1.0"
+  }
+}

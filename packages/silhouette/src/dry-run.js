@@ -1,5 +1,4 @@
 import {CameoBluetooth} from './bluetooth.js';
-export const isDryRun=()=>['localhost','127.0.0.1','[::1]'].includes(location.hostname)&&document.querySelector('meta[name="dry-run"]')?.content==='true';
 export class DryRunCameo extends CameoBluetooth{
  constructor(onState=()=>{}){super(onState);this.simulated=true;this.identity='Simulated Cameo';}
  async connect(){this.connected=true;this.stopped=false;this.onState('Simulated Cameo connected');return this.identity;}

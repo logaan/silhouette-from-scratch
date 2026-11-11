@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {RISK_PHRASE,localDay,renewalDate,acknowledgementState,acknowledge} from '../web/acknowledgement.js';
+import {RISK_PHRASE,localDay,renewalDate,acknowledgementState,acknowledge} from '../acknowledgement.js';
 const now=new Date(2026,10,12,10);
 test('first use requires the typed phrase and rejects checkbox-only acceptance',()=>{assert.deepEqual(acknowledgementState(null,now),{needsPhrase:true,accepted:false});assert.throws(()=>acknowledge(null,{checked:true},now),/Type/);assert.throws(()=>acknowledge(null,{phrase:'yes'},now),/Type/);});
 test('phrase matching is case insensitive and submission becomes checked',()=>{const r=acknowledge(null,{phrase:RISK_PHRASE.toUpperCase()},now);assert.equal(r.acknowledgedDay,localDay(now));assert.deepEqual(acknowledgementState(r,now),{needsPhrase:false,accepted:true});});

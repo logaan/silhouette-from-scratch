@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {parseDXF} from '../web/geometry.js';
-import {optimisePaths,previewSegments} from '../web/order.js';
-import {compileJob} from '../web/job.js';
+import {parseDXF} from '@cut-and-crease/dxf';
+import {optimisePaths,previewSegments} from '@cut-and-crease/dxf';
+import {compileJob} from '@cut-and-crease/dxf';
 const path=(points,operation='cut')=>({points,operation});
 const edges=paths=>paths.flatMap(p=>p.points.slice(1).map((b,i)=>[p.points[i],b].map(pt=>pt.map(n=>Math.round(n*20)).join(',')).sort().join('|'))).sort();
 test('joins reversed touching paths without bridging gaps or mixing tools',()=>{
@@ -16,7 +16,7 @@ test('nearby geometry is not skipped for a distant collinear continuation',()=>{
  assert.deepEqual(optimisePaths(p)[1].points,[[10,1],[10,2]]);
 });
 test('box optimisation preserves every machine segment and reduces separate paths',()=>{
- const drawing=parseDXF(fs.readFileSync('test-files/foldover-8-compartment-box.dxf','utf8'));
+ const drawing=parseDXF(fs.readFileSync(new URL('../../../test-files/foldover-8-compartment-box.dxf',import.meta.url),'utf8'));
  for(const operation of ['cut','crease']){const p=drawing.paths.filter(p=>p.operation===operation),out=optimisePaths(p);assert.deepEqual(edges(out),edges(p));assert(out.length<p.length);}
  const preset={name:'Test',cut:{tool:1,force:15,speed:30,depth:4,passes:1},crease:{tool:2,force:33,speed:30,passes:2}};
  const options={mat:'12x12',sheetWidth:300,sheetHeight:300,x:0,y:0,rotation:0,order:'crease-first'};

@@ -1,0 +1,26 @@
+{
+  "name": "@cut-and-crease/silhouette",
+  "version": "0.1.0",
+  "description": "Silhouette Cameo 5 Alpha Bluetooth communication",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.js",
+    "./poll-worker.js": "./src/poll-worker.js"
+  },
+  "files": [
+    "src",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/logaan/silhouette-from-scratch.git",
+    "directory": "packages/silhouette"
+  }
+}

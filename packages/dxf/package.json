@@ -1,0 +1,28 @@
+{
+  "name": "@cut-and-crease/dxf",
+  "version": "0.1.0",
+  "description": "DXF optimisation and job generation for Silhouette Cameo",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/logaan/silhouette-from-scratch.git",
+    "directory": "packages/dxf"
+  },
+  "dependencies": {
+    "dxf-parser": "1.1.2"
+  }
+}

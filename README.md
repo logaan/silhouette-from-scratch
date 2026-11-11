@@ -6,12 +6,58 @@
 
 # Silhouette — Cut & Crease
 
-A static browser app for the **Silhouette Cameo 5 Alpha**. Import a DXF, position it on a sheet, choose a material preset, and send a job directly from Chrome over Bluetooth. Files stay in your browser; no backend is required.
+Two reusable libraries and a static browser app for the **Silhouette Cameo 5 Alpha**. Import a DXF, position it on a sheet, choose a material preset, and send a job directly from Chrome over Bluetooth. Files stay in your browser; no backend is required.
 
 - Pure red (`#FF0000`) cuts with the AutoBlade in holder 1.
 - Pure blue (`#0000FF`) creases with the embossing tool in holder 2.
 - All other colours are ignored.
 - Supports 12 × 12″ and 12 × 24″ mats, configurable sheet sizes, and either operation order.
+
+## Monorepo packages
+
+This repository uses npm workspaces. The two libraries are plain JavaScript ES modules with MIT licences; neither depends on the web app or its presets. Package names below are workspace names, not published npm releases. Run `scripts/pack-libraries.sh` to create installable library archives in `artifacts/`.
+
+| Location | Package | Responsibility |
+| --- | --- | --- |
+| `packages/silhouette` | `@cut-and-crease/silhouette` | Cameo 5 Alpha Web Bluetooth connection, acknowledged writes, buffering, readiness checks, pause/resume and activity logs |
+| `packages/dxf` | `@cut-and-crease/dxf` | DXF parsing, positioning, path optimisation, Silhouette job compilation and optimised DXF export |
+| `apps/web` | `@cut-and-crease/web` | Static wizard, visualisation, consent, material presets and sheet sizes |
+
+The DXF package works in Node.js and browser bundles. The communication package requires Web Bluetooth for hardware; its `DryRunCameo` simulator also works in Node.js. Device support is currently limited to the Cameo 5 Alpha protocol tested in this project.
+
+Library usage in a workspace consumer or a project with the packed libraries installed:
+
+```js
+import {parseDXF, compileJob, exportDXF, OPTIMISATIONS} from '@cut-and-crease/dxf';
+import {DryRunCameo} from '@cut-and-crease/silhouette';
+
+const drawing = parseDXF(dxfText);
+const settings = {
+  name: 'My material',
+  cut: {tool: 1, force: 15, speed: 30, depth: 4, passes: 1},
+  crease: {tool: 2, force: 33, speed: 30, passes: 2}
+};
+const job = compileJob(drawing, {
+  mat: '12x12', sheetWidth: 300, sheetHeight: 300,
+  x: 10, y: 10, rotation: 0, order: 'crease-first',
+  prepareTracking: false,
+  optimisations: Object.fromEntries(OPTIMISATIONS.map(name => [name, true]))
+}, settings);
+const optimisedDXF = exportDXF(job);
+const device = new DryRunCameo();
+await device.connect();
+device.batchLimit = 'tool';
+await device.run(job, (fraction, label, detail) => console.log(label, detail.phase));
+device.disconnect();
+```
+
+`dxfText` is the source file's text. Coordinates and sheet dimensions use millimetres; placement is measured from the top-left. `parseDXF(text, 'mm')` or `'inch'` overrides file units. `compileJob` validates tool settings and material bounds and returns ordered paths plus transmission steps. `exportDXF` exports each path once, without tool settings or repeated passes. Lower-level exports include `optimisePaths`, `joinCreasesThroughCuts`, `bounds`, `positioned`, `previewSegments`, `operationCount` and `MATS`.
+
+For hardware, use `CameoBluetooth` instead of `DryRunCameo`, call `connect()` from a browser user action, and attend the machine. `run(job, onProgress)` reports sending, waiting, confirmed completion and failure. `pause()` and `resume()` control transmission; they cannot stop buffered motion. The library does not provide the web app's consent or resume-confirmation UI: consumers must supply their own controls. `device.log` contains activity events. Buffering is explicit: leave `batchLimit` unset for one operation at a time, or set it to `'tool'` to queue each tool phase.
+
+The communication package ships its polling worker as `@cut-and-crease/silhouette/poll-worker.js`. Bundlers must preserve the worker URL or copy that asset beside the bundled module, as this repo's build does. Without an available worker, polling falls back to the page timer. Hardware APIs are only accessed when connecting or running, so importing either library does not request a device.
+
+Each package has its own tests; the root suite also checks integration and installs packed libraries in an isolated temporary consumer. Shared DXF fixtures remain in `test-files/`; capture-analysis tools remain in `scripts/`.
 
 ## Run locally
 
@@ -45,7 +91,7 @@ Buffering is enabled by default: send all operations for the current tool, then 
 
 ## Presets
 
-Each file in `materials/` defines a material. Each file in `material-sizes/` defines a sheet size. Edit these YAML files and rebuild to update the app. Adjusting settings in the interface does not change the preset files.
+Each file in `apps/web/materials/` defines a material. Each file in `apps/web/material-sizes/` defines a sheet size. Edit these YAML files and rebuild to update the app. Adjusting settings in the interface does not change the preset files.
 
 Material fields:
 
@@ -93,7 +139,9 @@ All project commands are available in `scripts/`:
 | `setup.sh` | Install application dependencies |
 | `build.sh` | Build the static site in `dist/` |
 | `serve.sh` | Serve the local preview |
-| `test.sh` | Run application and capture-parser tests |
+| `test.sh` | Run workspace, standalone-package and capture-parser tests |
+| `pack-libraries.sh` | Create installable archives of both libraries in `artifacts/` |
+| `test-packages.sh` | Pack both libraries and test them in an isolated consumer project |
 | `analyze-capture.sh` | Extract Silhouette data from a Bluetooth capture; requires Wireshark’s `tshark` |
 | `setup-capture-tools.sh` | Install Python dependencies for fixture generation |
 | `create-colour-test.sh` | Generate the DXF colour-test fixture |

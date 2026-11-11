@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {compileJob,OPTIMISATIONS,operationCount} from '../web/job.js';
-import {parseDXF} from '../web/geometry.js';
-import {previewSegments,optimisePaths} from '../web/order.js';
+import {compileJob,OPTIMISATIONS,operationCount} from '@cut-and-crease/dxf';
+import {parseDXF} from '@cut-and-crease/dxf';
+import {previewSegments,optimisePaths} from '@cut-and-crease/dxf';
 const preset={name:'Test',cut:{tool:1,force:15,speed:30,depth:4,passes:2},crease:{tool:2,force:33,speed:30,passes:3}};
 const options={mat:'12x12',sheetWidth:300,sheetHeight:300,x:10,y:10,rotation:0,order:'crease-first'};
 const flags=enabled=>Object.fromEntries(OPTIMISATIONS.map(k=>[k,enabled.includes(k)]));
@@ -24,7 +24,7 @@ test('touching-path joining and nearby ordering can be selected independently',(
  assert.deepEqual(optimisePaths(paths,{join:false,reorder:true})[0].points[0],[0,0]);
 });
 test('all option combinations preserve required box geometry and passes',()=>{
- const drawing=parseDXF(fs.readFileSync('test-files/foldover-8-compartment-box.dxf','utf8')),p={...preset,cut:{...preset.cut,passes:1},crease:{...preset.crease,passes:2}},o={...options,x:0,y:0};
+ const drawing=parseDXF(fs.readFileSync(new URL('../../../test-files/foldover-8-compartment-box.dxf',import.meta.url),'utf8')),p={...preset,cut:{...preset.cut,passes:1},crease:{...preset.crease,passes:2}},o={...options,x:0,y:0};
  const original=compileJob(drawing,{...o,optimisations:flags([])},p),expected=drawn(original);assert.equal(operationCount(original),498);
  for(let bits=0;bits<2**OPTIMISATIONS.length;bits++){
   const optimisations=Object.fromEntries(OPTIMISATIONS.map((k,i)=>[k,!!(bits&(1<<i))])),job=compileJob(drawing,{...o,optimisations},p);

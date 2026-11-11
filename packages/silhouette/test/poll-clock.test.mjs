@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {PollClock} from '../web/poll-clock.js';
+import {PollClock} from '../src/poll-clock.js';
 test('worker owns polling waits and resolves matching requests only',async()=>{
  const sent=[],modes=[],worker={postMessage:m=>sent.push(m),terminate(){this.closed=true;}};
  const clock=new PollClock(mode=>modes.push(mode),()=>worker);let done=false;

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {bufferNotice} from '../web/buffer-status.js';
+import {bufferNotice} from '../buffer-status.js';
 const job={steps:[{label:'Set mat'},{label:'Cut 1/1 · pass 1/1'},{label:'Return to origin'}]};
 test('outstanding operation stays uncertain through sending and failure',()=>{
  for(const phase of ['sending','failed'])assert.match(bufferNotice({job,active:1,completed:0,phase}),/^Up to 1 operation/);

@@ -28,6 +28,14 @@ test('box optimisation preserves every machine segment and reduces separate path
  assert.deepEqual(previewSegments(optimised).at(-1).to,[0,0]);
 });
 test('horizontal collinear groups are scheduled before vertical collinear groups',()=>{
- const p=[path([[0,0],[0,1]]),path([[0,3],[0,4]]),path([[10,10],[11,10]]),path([[13,10],[14,10]])];
- const result=optimisePaths(p);assert.equal(result[0].points[0][1],10);assert.equal(result[1].points[0][1],10);
+ const p=[path([[0,0],[1,1]]),path([[2,3],[2,4]]),path([[2,6],[2,7]]),path([[10,10],[11,10]]),path([[13,10],[14,10]])];
+ const result=optimisePaths(p);assert.equal(result[1].points[0][1],10);assert.equal(result[2].points[0][1],10);
+});
+test('first path starts nearest the top-left even when distant collinear groups exist',()=>{
+ const p=[path([[20,20],[30,20]]),path([[40,20],[50,20]]),path([[8,9],[2,3]])];
+ assert.deepEqual(optimisePaths(p)[0].points,[[2,3],[8,9]]);
+});
+test('closed paths start at their nearest vertex without changing their edges',()=>{
+ const p=[path([[20,20],[5,20],[5,5],[20,5],[20,20]])];
+ const result=optimisePaths(p);assert.deepEqual(result[0].points[0],[5,5]);assert.deepEqual(edges(result),edges(p));
 });

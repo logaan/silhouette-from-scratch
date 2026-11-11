@@ -23,7 +23,7 @@ bash scripts/build.sh
 bash scripts/serve.sh
 ```
 
-Open [localhost:4173](http://127.0.0.1:4173) in Chrome. Bluetooth requires HTTPS or localhost; opening the HTML file directly is not supported. Rebuild and refresh after changing the app or its presets.
+Open [localhost:4173](http://127.0.0.1:4173) in Chrome. Bluetooth requires HTTPS or localhost; opening the HTML file directly is not supported. Rebuild and refresh after changing the app or its presets. Pass `--dry-run` to `scripts/serve.sh` to automatically connect to a simulated Cameo and run the whole wizard without hardware. The local server enables this mode only for the pages it serves; GitHub Pages builds use the real device.
 
 ## Use
 

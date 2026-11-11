@@ -7,3 +7,14 @@ test('unloaded mat refuses job before commands',async()=>{const c=new CameoBluet
 test('job executes in order with readiness barriers and final progress',async()=>{const c=new CameoBluetooth();c.connected=true;const events=[];c.ready=async()=>events.push('ready');c.send=async bytes=>events.push(new TextDecoder().decode(bytes));await c.run({steps:[{label:'Crease',commands:['J2','M10,20'],wait:true},{label:'Cut',commands:['J1','M30,40'],wait:true}]},(progress)=>{if(progress===1)events.push('complete');});assert.deepEqual(events,['ready','J2\x03M10,20\x03','ready','J1\x03M30,40\x03','ready','complete']);assert.equal(c.busy,false);});
 test('failed send skips subsequent tool operation and releases busy state',async()=>{const c=new CameoBluetooth();c.connected=true;c.ready=async()=>{};const commands=[];c.send=async b=>{commands.push([...b]);throw Error('write failed');};await assert.rejects(c.run({steps:[{label:'First',commands:['J2'],wait:true},{label:'Second',commands:['J1'],wait:true}]}),/write failed/);assert.equal(commands.length,1);assert.equal(c.busy,false);});
 test('query timeout clears pending state',async()=>{const c=new CameoBluetooth();c.send=async()=>{};await assert.rejects(c.query(new Uint8Array([27,5]),5),/No response/);assert.equal(c.pending,null);});
+test('reconnect uses previously authorised Cameo without showing a chooser',async()=>{
+ const originalNavigator=Object.getOwnPropertyDescriptor(globalThis,'navigator'),originalStorage=Object.getOwnPropertyDescriptor(globalThis,'localStorage');
+ const remembered={id:'saved',name:'CAMEO 5 ALPHA'};let connected;
+ try{
+  Object.defineProperty(globalThis,'navigator',{configurable:true,value:{bluetooth:{getDevices:async()=>[remembered],requestDevice:()=>{throw Error('Unexpected chooser');}}}});
+  Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{getItem:()=>remembered.id}});
+  const device=new CameoBluetooth();device.connect=async target=>{connected=target;};
+  assert.equal(await device.reconnect(),true);assert.equal(connected,remembered);
+  navigator.bluetooth.getDevices=undefined;assert.equal(await device.reconnect(),false);
+ }finally{if(originalNavigator)Object.defineProperty(globalThis,'navigator',originalNavigator);else delete globalThis.navigator;if(originalStorage)Object.defineProperty(globalThis,'localStorage',originalStorage);else delete globalThis.localStorage;}
+});

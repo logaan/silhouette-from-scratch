@@ -14,9 +14,11 @@ let commit=process.env.GITHUB_SHA;
 if(!commit){try{commit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();}catch{commit='unknown';}}
 if(!/^[a-f0-9]{40}$/i.test(commit))commit='unknown';
 await fs.copyFile('web/style.css','dist/style.css');
+const runId=process.env.GITHUB_RUN_ID;
+const buildUrl=runId&&/^\d+$/.test(runId)?`https://github.com/logaan/silhouette-from-scratch/actions/runs/${runId}`:`https://github.com/logaan/silhouette-from-scratch/commit/${commit}`;
 const html=await fs.readFile('web/index.html','utf8');
-await fs.writeFile('dist/index.html',html.replaceAll('__BUILD_COMMIT__',commit).replaceAll('__BUILD_COMMIT_SHORT__',commit.slice(0,7)));
-await fs.writeFile('dist/build-info.json',JSON.stringify({commit},null,2)+'\n');
+await fs.writeFile('dist/index.html',html.replaceAll('__BUILD_COMMIT__',commit).replaceAll('__BUILD_COMMIT_SHORT__',commit.slice(0,7)).replaceAll('__BUILD_URL__',buildUrl));
+await fs.writeFile('dist/build-info.json',JSON.stringify({commit,buildUrl},null,2)+'\n');
 await fs.writeFile('dist/config.json',JSON.stringify({materials,sizes},null,2));
 await fs.copyFile('test-files/colour-protocol-test-70mm.dxf','dist/example.dxf');
 await fs.copyFile('test-files/foldover-8-compartment-box.dxf','dist/box.dxf');

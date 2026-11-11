@@ -1,3 +1,4 @@
+import {DryRunCameo,isDryRun} from './dry-run.js';
 import {previewSegments} from './order.js';
 import {RISK_KEY,acknowledgementState,acknowledge} from './acknowledgement.js';
 import {panView,zoomView} from './viewport.js';
@@ -7,7 +8,8 @@ import {CameoBluetooth} from './bluetooth.js';
 const $=id=>document.getElementById(id),NS='http://www.w3.org/2000/svg';
 let view=null,viewMat=null;
 let config,drawing=null,job=null,reviewed=null,rawText='',busy=false,hasRun=false;
-const device=new CameoBluetooth(state=>{$('connection').textContent=state;$('connect').textContent=device.connected?'Disconnect':'Connect Cameo ↗';updateRun();});
+const dryRun=isDryRun();
+const device=new (dryRun?DryRunCameo:CameoBluetooth)(state=>{$('connection').textContent=state;$('connect').textContent=device.connected?'Disconnect':'Connect Cameo ↗';updateRun();});
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;setTimeout(()=>$('toast').hidden=true,10000);}
 function node(tag,attrs,parent){const el=document.createElementNS(NS,tag);for(const [k,v]of Object.entries(attrs))el.setAttribute(k,v);parent.appendChild(el);return el;}
 function options(){const size=config.sizes.find(s=>s.id===$('sheet').value);return {mat:$('mat').value,sheetWidth:$('landscape').checked?size.height_mm:size.width_mm,sheetHeight:$('landscape').checked?size.width_mm:size.height_mm,x:Number($('x').value),y:Number($('y').value),rotation:Number($('rotation').value),order:$('order').value,optimise:$('optimise').checked};}
@@ -45,7 +47,7 @@ function review(){if(!job)return;reviewed=structuredClone(job);const content=$('
  const p=document.createElement('p');p.textContent=`${job.material} · ${MATS[job.mat].name} mat · ${job.sheet.width} × ${job.sheet.height} mm material`;content.appendChild(p);
  const table=document.createElement('table'),tr=document.createElement('tr');for(const h of ['Operation','Tool','Force','Speed','Depth','Passes']){const th=document.createElement('th');th.textContent=h;tr.appendChild(th);}table.appendChild(tr);
  for(const op of job.operations){const row=document.createElement('tr');for(const value of [op.operation,op.tool,op.force,op.speed,op.depth??'—',op.passes]){const td=document.createElement('td');td.textContent=value;row.appendChild(td);}table.appendChild(row);}content.appendChild(table);
- const note=document.createElement('p');note.textContent=`${job.ignored} ignored entities excluded. ${job.bytes.toLocaleString()} bytes prepared. Placement: ${job.options.x}, ${job.options.y} mm.`;content.appendChild(note);
+ const note=document.createElement('p');note.textContent=`${job.ignored} ignored entities excluded. Placement: ${job.options.x}, ${job.options.y} mm.`;content.appendChild(note);
  $('ready-check').checked=false;updateRun();preparePreview();if(screen!=='preview')navigate('preview');}
 let riskRecord=null;
 function readRisk(){
@@ -64,11 +66,11 @@ window.addEventListener('storage',e=>{if(e.key===RISK_KEY||e.key===null)updateRu
 window.addEventListener('focus',()=>updateRun());
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)updateRun();});
 setInterval(()=>{if(screen==='preview')updateRun();},30000);
-function updateRun(){const risk=refreshRisk();$('connect-next').disabled=!device.connected;$('wizard-next').disabled=busy||(screen==='connect'&&!device.connected)||(screen==='design'&&!job);$('run').disabled=!risk.accepted||!reviewed||!device.connected||!$('ready-check').checked||busy;$('run-note').textContent=device.connected?'Run sends this reviewed job to the Cameo.':'Connect the Cameo using Chrome to continue.';}
+function updateRun(){const risk=refreshRisk();$('connect-next').disabled=!device.connected;$('wizard-next').disabled=busy||(screen==='connect'&&!device.connected)||(screen==='design'&&!job);$('run').disabled=!risk.accepted||!reviewed||!device.connected||!$('ready-check').checked||busy;$('run-note').textContent=device.connected?(dryRun?'Dry run only. No commands will be sent to hardware.':'Run sends this reviewed job to the Cameo.'):'Connect the Cameo using Chrome to continue.';}
 function setBusy(value){busy=value;for(const el of document.querySelectorAll('main input,main select,main button,#connect'))el.disabled=value;$('stop').disabled=!value;if(!value){render();$('connect').disabled=false;showScreen('run');}updateRun();}
-async function run(){if(!reviewed||busy||!device.connected||!$('ready-check').checked)return;if(!refreshRisk().accepted){updateRun();return;}const snapshot=reviewed;hasRun=true;navigate('run');setBusy(true);
- try{await device.run(snapshot,(p,label)=>{$('progress').value=p;$('progress-label').textContent=label;});}
- catch(err){$('progress-label').textContent=err.message;toast(err.message);}finally{setBusy(false);}}
+async function run(){if(!reviewed||busy||!device.connected||!$('ready-check').checked)return;if(!refreshRisk().accepted){updateRun();return;}const snapshot=reviewed;$('progress').value=0;$('run-title').textContent=dryRun?'Simulating your job.':'Your job is in motion.';$('run-description').textContent=dryRun?'The simulated Cameo accepts every command without moving hardware.':'Keep the machine attended while it works.';hasRun=true;navigate('run');setBusy(true);
+ try{await device.run(snapshot,(p,label)=>{$('progress').value=p;$('progress-label').textContent=label;});$('run-title').textContent=dryRun?'Dry run complete.':'Your job is complete.';$('run-description').textContent=dryRun?'The full job was accepted by the simulated Cameo. No hardware commands were sent.':'The Cameo reports ready. Your activity log is available below.';}
+ catch(err){$('run-title').textContent='Job stopped.';$('progress-label').textContent=err.message;toast(err.message);}finally{setBusy(false);}}
 $('file').addEventListener('change',e=>importFile(e.target.files[0]));
 $('drop').addEventListener('dragover',e=>e.preventDefault());$('drop').addEventListener('drop',e=>{e.preventDefault();importFile(e.dataTransfer.files[0]);});
 $('example').onclick=async()=>{try{const response=await fetch('./example.dxf');if(!response.ok)throw Error('Example unavailable');await importText(await response.text(),'Colour protocol test · 70 mm');}catch(err){toast(err.message);}};
@@ -80,7 +82,7 @@ $('center').onclick=centreDrawing;
 $('review').onclick=review;$('ready-check').onchange=updateRun;$('run').onclick=run;
 $('download').onclick=()=>{if(job)download('silhouette-job-report.json',JSON.stringify(job,null,2));};
 $('save-log').onclick=()=>download('silhouette-activity.json',JSON.stringify({identity:device.identity||null,events:device.log},null,2));
-$('connect').onclick=async()=>{if(device.connected){device.disconnect();return;}try{$('connect').disabled=true;$('connection').textContent='Choosing device…';await device.connect();}catch(err){toast(err.message);$('connection').textContent='Not connected';}finally{$('connect').disabled=false;updateRun();}};
+$('connect').onclick=async()=>{if(device.connected){device.disconnect();return;}try{$('connect').disabled=true;$('connection').textContent='Choosing device…';await device.connect();navigate('material');}catch(err){toast(err.message);$('connection').textContent='Not connected';}finally{$('connect').disabled=false;updateRun();}};
 $('stop').onclick=()=>{device.stop();$('progress-label').textContent='Sending stopped. Press the machine’s pause button to halt buffered movement.';};
 let drag=null;
 function coord(e){const p=new DOMPoint(e.clientX,e.clientY);return p.matrixTransform($('canvas').getScreenCTM().inverse());}
@@ -100,13 +102,7 @@ $('canvas').addEventListener('keydown',e=>{if(screen!=='design'||busy||!drawing)
 
 const screens=['connect','material','design','preview','run'];
 let screen='connect',animation=null,segments=[],segmentIndex=0,segmentProgress=0,lastFrame=0;
-const materialPanel=document.querySelector('.panel.right>section');
-const paperPanel=document.querySelector('.panel.left>section:nth-child(2)');
-$('screen-material').append(materialPanel,paperPanel);
 const canvasPanel=document.querySelector('.canvas-panel');
-const canvasHome=document.createElement('div');canvasHome.hidden=true;canvasPanel.before(canvasHome);
-$('screen-preview').after($('screen-run'));
-$('wizard-nav').after($('screen-preview'));
 function showScreen(next){
  if(!screens.includes(next))next='connect';
  if(!device.connected&&next!=='connect'&&!busy)next='connect';
@@ -114,12 +110,12 @@ function showScreen(next){
  if(next==='run'&&!busy&&!hasRun)next='design';
  stopPreview();screen=next;window.scrollTo(0,0);document.body.classList.toggle('previewing',screen==='preview');
  for(const id of screens)$('screen-'+id).hidden=id!==screen;
- if(screen==='preview')$('preview-canvas').append(canvasPanel);else canvasHome.after(canvasPanel);
- $('wizard-nav').textContent=screens.map((id,i)=>`${i+1}. ${id===screen?'['+id+']':id}`).join('  →  ');
+ if(screen==='preview')$('preview-canvas').append(canvasPanel);else $('design-canvas').append(canvasPanel);
+ $('wizard-nav').replaceChildren(...screens.map((id,i)=>{const item=document.createElement('span');item.className='wizard-step'+(id===screen?' current':i<screens.indexOf(screen)?' completed':'');if(id===screen)item.setAttribute('aria-current','step');const number=document.createElement('span');number.className='step-number';number.textContent=String(i+1).padStart(2,'0');item.append(number,document.createTextNode(id[0].toUpperCase()+id.slice(1)));return item;}));
  $('wizard-back').disabled=screen==='connect'||busy;
  $('wizard-next').hidden=screen==='preview'||screen==='run';
  $('connect-next').hidden=screen!=='connect';
- $('wizard-next').hidden=screen==='connect'||screen==='preview'||screen==='run';
+ $('wizard-next').hidden=screen!=='material';$('wizard-next').textContent='Arrange design →';
  $('preview-art').replaceChildren();
  if(screen==='preview'){review();preparePreview();}
  updateRun();
@@ -146,4 +142,4 @@ $('play-preview').onclick=()=>{if(animation!==null){stopPreview();return;}if(seg
 $('restart-preview').onclick=preparePreview;
 $('optimise').onchange=render;
 history.replaceState({screen:'connect'},'','#connect');showScreen('connect');
-try{const res=await fetch('./config.json');if(!res.ok)throw Error('Material configuration unavailable. Run npm run build.');config=await res.json();for(const [id,items]of [['material',config.materials],['sheet',config.sizes]])for(const item of items){const op=document.createElement('option');op.value=item.id;op.textContent=item.name;$(id).appendChild(op);}$('sheet').value='a3';$('material').value='quill-100gsm-tracing-paper';loadPreset();if(!navigator.bluetooth)$('connection').textContent='Chrome required for Bluetooth';}catch(err){toast(err.message);}
+try{const res=await fetch('./config.json');if(!res.ok)throw Error('Material configuration unavailable. Run npm run build.');config=await res.json();for(const [id,items]of [['material',config.materials],['sheet',config.sizes]])for(const item of items){const op=document.createElement('option');op.value=item.id;op.textContent=item.name;$(id).appendChild(op);}$('sheet').value='a3';$('material').value='makr-180gsm-paper-cardstock';loadPreset();if(dryRun){$('dry-run-banner').hidden=false;await device.connect();navigate('material');}else if(!navigator.bluetooth)$('connection').textContent='Chrome required for Bluetooth';else{try{$('connect').disabled=true;$('connection').textContent='Checking saved connection…';if(await device.reconnect())navigate('material');else $('connection').textContent='Not connected';}catch{$('connection').textContent='Could not reconnect. Turn on your Cameo and connect below.';}finally{$('connect').disabled=false;}}}catch(err){toast(err.message);}

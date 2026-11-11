@@ -3,14 +3,24 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
 export class CameoBluetooth{
  constructor(onState=()=>{}){this.onState=onState;this.busy=false;this.connected=false;this.log=[];this.stopped=false;this.pending=null;this.rx=[];}
  record(direction,data){this.log.push({time:new Date().toISOString(),direction,hex:Array.from(data,b=>b.toString(16).padStart(2,'0')).join('')});if(this.log.length>100000)this.log.shift();}
- async connect(){
+ async reconnect(){
+  if(!navigator.bluetooth?.getDevices)return false;
+  const devices=await navigator.bluetooth.getDevices();let saved;try{saved=localStorage.getItem('cameo-device-id');}catch{}
+  const matching=devices.filter(d=>/^CAMEO 5 ALPHA/i.test(d.name||''));
+  const device=devices.find(d=>d.id===saved)||(matching.length===1?matching[0]:null);
+  if(!device)return false;await this.connect(device);return true;
+ }
+ async connect(knownDevice=null){
   if(this.busy)throw Error('A job is running');
   if(!navigator.bluetooth)throw Error('Use Chrome on macOS with HTTPS or localhost for Bluetooth.');
   this.disconnect();this.stopped=false;
-  this.device=await navigator.bluetooth.requestDevice({filters:[{services:[UUID.service]},{namePrefix:'CAMEO'}],optionalServices:[UUID.service]});
+  this.device=knownDevice||await navigator.bluetooth.requestDevice({filters:[{services:[UUID.service]},{namePrefix:'CAMEO'}],optionalServices:[UUID.service]});
   this.device.addEventListener('gattserverdisconnected',()=>{this.connected=false;this.stopped=true;this.pending?.reject(Error('Cameo disconnected. Job was not resumed.'));this.onState('Disconnected');});
   try{
-   const server=await this.device.gatt.connect(),service=await server.getPrimaryService(UUID.service);
+   const target=this.device;let expired=false,timer;
+   const connection=target.gatt.connect().then(server=>{if(expired){target.gatt.disconnect();throw Error('Connection timed out');}return server;});
+   let server;try{server=await Promise.race([connection,new Promise((_,reject)=>{timer=setTimeout(()=>{expired=true;reject(Error('Cameo connection timed out. Check that it is on and nearby.'));},10000);})]);}finally{clearTimeout(timer);}
+   const service=await server.getPrimaryService(UUID.service);
    this.write=await service.getCharacteristic(UUID.write);this.read=await service.getCharacteristic(UUID.read);this.control=await service.getCharacteristic(UUID.control);
    this.read.addEventListener('characteristicvaluechanged',e=>this.receive(new Uint8Array(e.target.value.buffer,e.target.value.byteOffset,e.target.value.byteLength)));
    this.control.addEventListener('characteristicvaluechanged',e=>this.record('control',new Uint8Array(e.target.value.buffer,e.target.value.byteOffset,e.target.value.byteLength)));
@@ -19,7 +29,7 @@ export class CameoBluetooth{
    await delay(1000);this.rx=[];this.connected=true;
    const identity=await this.query(new TextEncoder().encode('FG\x03'));
    if(!/^CAMEO 5 ALPHA\b/i.test(identity))throw Error(`Expected CAMEO 5 ALPHA; device returned: ${identity}`);
-   this.identity=identity;this.onState(identity);return identity;
+   this.identity=identity;try{localStorage.setItem('cameo-device-id',this.device.id);}catch{}this.onState(identity);return identity;
   }catch(err){this.disconnect();throw err;}
  }
  receive(data){this.record('read',data);for(const b of data){if(b===3){const text=new TextDecoder().decode(new Uint8Array(this.rx)).trim();this.rx=[];this.pending?.resolve(text);}else this.rx.push(b);}}

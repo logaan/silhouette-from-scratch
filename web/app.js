@@ -6,7 +6,7 @@ import {previewSegments} from './order.js';
 import {RISK_KEY,acknowledgementState,acknowledge} from './acknowledgement.js';
 import {panView,zoomView} from './viewport.js';
 import {parseDXF,positioned,bounds} from './geometry.js';
-import {compileJob,MATS} from './job.js';
+import {compileJob,MATS,OPTIMISATIONS,optimisationSettings,operationCount} from './job.js';
 import {CameoBluetooth} from './bluetooth.js';
 const $=id=>document.getElementById(id),NS='http://www.w3.org/2000/svg';
 let view=null,viewMat=null;
@@ -17,11 +17,11 @@ let device=new (dryRun?DryRunCameo:CameoBluetooth)(connectionChanged);
 const bufferLab=createBufferLab(()=>device,()=>({connected:device.connected,busy,mode:dryRun?'dry-run':'hardware',phase:liveRun?.phase,active:liveRun?.active,completed:liveRun?.completed,outstanding:liveRun?.outstanding||[],build:liveRun?.job.build,paused:device.transmission.requested}));
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;setTimeout(()=>$('toast').hidden=true,10000);}
 function node(tag,attrs,parent){const el=document.createElementNS(NS,tag);for(const [k,v]of Object.entries(attrs))el.setAttribute(k,v);parent.appendChild(el);return el;}
-function options(){const size=config.sizes.find(s=>s.id===$('sheet').value);return {mat:$('mat').value,sheetWidth:$('landscape').checked?size.height_mm:size.width_mm,sheetHeight:$('landscape').checked?size.width_mm:size.height_mm,x:Number($('x').value),y:Number($('y').value),rotation:Number($('rotation').value),order:$('order').value,optimise:$('optimise').checked,creaseBridges:$('crease-bridges').checked};}
+function options(){const size=config.sizes.find(s=>s.id===$('sheet').value);return {mat:$('mat').value,sheetWidth:$('landscape').checked?size.height_mm:size.width_mm,sheetHeight:$('landscape').checked?size.width_mm:size.height_mm,x:Number($('x').value),y:Number($('y').value),rotation:Number($('rotation').value),order:$('order').value,optimisations:{join:$('join-paths').checked,reorder:$('optimise').checked,collinear:$('collinear').checked,reversePasses:$('reverse-passes').checked,creaseBridges:$('crease-bridges').checked,continuousCreases:$('continuous-creases').checked}};}
 function preset(){const p=structuredClone(config.materials.find(p=>p.id===$('material').value));for(const op of ['cut','crease'])for(const key of ['force','speed','passes',...(op==='cut'?['depth']:[])])p[op][key]=Number($(`${op}-${key}`).value);return p;}
 function loadPreset(){const p=config.materials.find(p=>p.id===$('material').value);$('mat').value=p.mat;$('sheet').value=p.size;$('landscape').checked=false;for(const op of ['cut','crease'])for(const key of ['force','speed','passes',...(op==='cut'?['depth']:[])])$(`${op}-${key}`).value=p[op][key];render();}
 function render(){
- if(!config)return;reviewed=null;job=null;$('crease-bridges').disabled=busy||!$('optimise').checked||$('order').value!=='crease-first';$('bridge-note').textContent=$('order').value!=='crease-first'?'Available when creasing before cutting.':'Follows short red sections to join blue creases without lifting. Added creasing is shown in teal.';
+ if(!config)return;reviewed=null;job=null;$('crease-bridges').disabled=busy||$('order').value!=='crease-first';$('bridge-note').textContent=$('order').value!=='crease-first'?'Available when creasing before cutting.':'Follows short red sections to join blue creases without lifting. Added creasing is shown in teal.';
  const o=screen==='run'&&liveRun?liveRun.job.options:options(),mat=MATS[o.mat],art=$('mat-art'),draw=$('drawing-art');art.replaceChildren();draw.replaceChildren();
  if(viewMat!==o.mat){viewMat=o.mat;view={x:-18,y:-18,width:mat.width+36,height:mat.height+36};$('canvas').style.aspectRatio=`${mat.width+36} / ${mat.height+36}`;}
  applyView();$('mat-label').textContent=mat.name;
@@ -150,7 +150,7 @@ function paintRun(){
   const uncertain=active&&liveRun.phase==='failed';
   node('line',{x1:s.from[0],y1:s.from[1],x2:s.to[0],y2:s.to[1],stroke:uncertain?'#b47c22':s.bridge?'#00877f':s.travel?'#82907d':s.operation==='cut'?'#d64036':'#304cdd','stroke-width':s.travel?.6:1.5,'stroke-dasharray':s.travel?'2 2':active?'3 1':'none',class:active&&!uncertain?'live-path':'','vector-effect':'non-scaling-stroke'},art);
  }
- const total=liveRun.job.operations.reduce((n,o)=>n+o.pathCount*o.passes,0),completed=liveRun.job.steps.slice(0,liveRun.completed+1).filter(s=>/^(Cut|Crease) /.test(s.label)).length;
+ const total=operationCount(liveRun.job),completed=liveRun.job.steps.slice(0,liveRun.completed+1).filter(s=>/^(Cut|Crease) /.test(s.label)).length;
  $('live-note').textContent=`${completed} of ${total} operations confirmed complete. `+(liveRun.phase==='failed'?'The amber path was not confirmed complete.':liveRun.phase==='complete'?'All operations completed.':liveRun.outstanding?.length>1?'Highlighted paths are the outstanding batch; the exact active operation is unknown.':'The animated path is active; exact tool position is not reported.');
 }
 function updateTransport(){
@@ -164,10 +164,11 @@ function preparePreview(){
  stopPreview();segments=job?previewSegments(job):[];timeline=new PreviewTimeline(segments);$('preview-art').replaceChildren();
  previewLines=segments.map(s=>node('line',{x1:s.from[0],y1:s.from[1],x2:s.to[0],y2:s.to[1],stroke:s.bridge?'#00877f':s.travel?'#747b76':s.operation==='cut'?'#a90000':'#001aa9','stroke-width':s.travel?.5:1.5,'stroke-dasharray':s.travel?'2 2':'none',display:'none'},$('preview-art')));
  node('circle',{id:'preview-marker',r:2,fill:'#1d352a',stroke:'#fff','stroke-width':.5},$('preview-art'));
- const travel=segments.filter(s=>s.travel).reduce((n,s)=>n+Math.hypot(s.to[0]-s.from[0],s.to[1]-s.from[1]),0);const count=j=>j.operations.reduce((n,o)=>n+o.pathCount*o.passes,0),total=job?count(job):0,before=job&&job.options.optimise?count(compileJob(drawing,{...options(),optimise:false},preset())):total;
- $('preview-count').textContent=job?.options.optimise?`${total} operations · ${before} before optimisation`:`${total} operations`;
- $('bridge-stats').textContent=job?.bridges.length?`${job.bridges.length} cut-line connections · ${job.bridges.reduce((n,b)=>n+b.length,0).toFixed(1)} mm extra creasing per pass (teal).`:job?.bridgeLimited?'Cut-line joining skipped: this drawing exceeds the analysis limit.':job?.options.creaseBridges&&job.options.optimise&&job.options.order==='crease-first'?'No short cut-line connections found.':'';
- $('preview-stats').textContent=`Each continuous cut or crease pass counts as one operation. ${travel.toFixed(0)} mm travel. Step buttons move one operation; rewind and fast forward play at 4×. Animation is illustrative, not an estimated run time.`;
+ const travel=segments.filter(s=>s.travel).reduce((n,s)=>n+Math.hypot(s.to[0]-s.from[0],s.to[1]-s.from[1]),0);const total=job?operationCount(job):0,enabled=job&&Object.values(optimisationSettings(job.options)).some(Boolean),before=enabled?operationCount(compileJob(drawing,{...options(),optimisations:Object.fromEntries(OPTIMISATIONS.map(k=>[k,false]))},preset())):total;
+ $('preview-count').textContent=enabled?`${total} operations · ${before} before optimisation`:`${total} operations`;
+ $('bridge-stats').textContent=job?.bridges.length?`${job.bridges.length} cut-line connections · ${job.bridges.reduce((n,b)=>n+b.length,0).toFixed(1)} mm extra creasing per pass (teal).`:job?.bridgeLimited?'Cut-line joining skipped: this drawing exceeds the analysis limit.':job&&optimisationSettings(job.options).creaseBridges&&job.options.order==='crease-first'?'No short cut-line connections found.':'';
+
+ $('preview-stats').textContent=`Each uninterrupted tool-down path counts as one operation, including joined repeat crease passes. ${travel.toFixed(0)} mm travel. Step buttons move one operation; rewind and fast forward play at 4×. Animation is illustrative, not an estimated run time.`;
  paintBridges(job);paintPreview();
 }
 function paintPreview(){
@@ -201,6 +202,6 @@ $('back-preview').onclick=()=>{stopPreview();timeline?.step(-1);paintPreview();}
 $('next-preview').onclick=()=>{stopPreview();timeline?.step(1);paintPreview();};
 $('rewind-preview').onclick=()=>playPreview(-800);
 $('forward-preview').onclick=()=>playPreview(800);
-$('optimise').onchange=render;$('crease-bridges').onchange=render;
+for(const id of ['optimise','join-paths','collinear','reverse-passes','crease-bridges','continuous-creases'])$(id).onchange=render;
 history.replaceState({screen:'connect'},'','#connect');showScreen('connect');
 try{const res=await fetch('./config.json');if(!res.ok)throw Error('Material configuration unavailable. Run npm run build.');config=await res.json();for(const [id,items]of [['material',config.materials],['sheet',config.sizes]])for(const item of items){const op=document.createElement('option');op.value=item.id;op.textContent=item.name;$(id).appendChild(op);}$('sheet').value='a3';$('material').value='makr-180gsm-paper-cardstock';loadPreset();if(dryRun){$('dry-run-banner').hidden=false;await device.connect();navigate('material');}else if(!navigator.bluetooth)$('connection').textContent='Chrome required for Bluetooth';else{try{connecting=true;$('choose-dry-run').disabled=true;$('connect').disabled=true;$('connection').textContent='Checking saved connection…';if(await device.reconnect())navigate('material');else $('connection').textContent='Not connected';}catch{$('connection').textContent='Could not reconnect. Turn on your Cameo and connect below.';}finally{connecting=false;$('choose-dry-run').disabled=false;$('connect').disabled=false;}}}catch(err){toast(err.message);}

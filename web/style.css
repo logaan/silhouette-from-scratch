@@ -13,3 +13,5 @@
 .bridge-option{margin-top:20px;padding-top:18px;border-top:1px solid #e1e8de}#bridge-stats{color:#007970}body:not(.previewing):not(.running-view) #bridge-art{display:none}
 
 #buffer-lab-banner{background:#fff4da;border:1px solid #e1c98c;color:#795c27;padding:14px 18px;border-radius:8px;font-size:12px;margin-bottom:24px}
+
+.optimisation-options .check:not(:first-child){margin-top:18px}.optimisation-options .caption{margin-top:6px}

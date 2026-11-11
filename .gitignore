@@ -1,0 +1,7 @@
+.DS_Store
+captures/*
+!captures/.gitkeep
+*.pklg
+*.pcap
+*.pcapng
+*.log

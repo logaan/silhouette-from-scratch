@@ -1,4 +1,5 @@
 import {build} from 'esbuild';
+import {execFileSync} from 'node:child_process';
 import {parse} from 'yaml';
 import fs from 'node:fs/promises';
 import {MATS} from '../web/job.js';
@@ -9,7 +10,13 @@ const sizes=await load('material-sizes');for(const s of sizes)if(![s.width_mm,s.
 for(const p of materials)if(!MATS[p.mat]||!sizes.some(s=>s.id===p.size))throw Error('Invalid material defaults');
 await fs.mkdir('dist',{recursive:true});
 await build({entryPoints:['web/browser.js'],bundle:true,format:'esm',outfile:'dist/app.js',minify:true,legalComments:'external',target:'chrome110'});
-for(const f of ['index.html','style.css'])await fs.copyFile(`web/${f}`,`dist/${f}`);
+let commit=process.env.GITHUB_SHA;
+if(!commit){try{commit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();}catch{commit='unknown';}}
+if(!/^[a-f0-9]{40}$/i.test(commit))commit='unknown';
+await fs.copyFile('web/style.css','dist/style.css');
+const html=await fs.readFile('web/index.html','utf8');
+await fs.writeFile('dist/index.html',html.replaceAll('__BUILD_COMMIT__',commit).replaceAll('__BUILD_COMMIT_SHORT__',commit.slice(0,7)));
+await fs.writeFile('dist/build-info.json',JSON.stringify({commit},null,2)+'\n');
 await fs.writeFile('dist/config.json',JSON.stringify({materials,sizes},null,2));
 await fs.copyFile('test-files/colour-protocol-test-70mm.dxf','dist/example.dxf');
 await fs.copyFile('test-files/foldover-8-compartment-box.dxf','dist/box.dxf');
